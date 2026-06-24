@@ -24,6 +24,7 @@ namespace FishXIVItemReader
     public sealed class PluginMain : UserControl, IActPluginV1
     {
         private const string PluginTabTitle = "鲜鱼背包读取器";
+        private const string EmbeddedUpdaterResourceName = "FishXIVItemReader.Update.FishXIVItemReader.Updater.exe";
 
         private readonly Label processLabel;
         private readonly ComboBox processComboBox;
@@ -76,6 +77,7 @@ namespace FishXIVItemReader
         private Task autoReadTask;
         private CancellationTokenSource updateCancellation;
         private PluginUpdateCheckResult latestUpdateCheckResult;
+        private string pendingUpdaterExecutablePath;
         private int autoReadVersion;
         private int activeAutoReadProcessId;
         private InventoryReadMode activeAutoReadMode;
@@ -289,8 +291,8 @@ namespace FishXIVItemReader
             };
             updateTable.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 74));
             updateTable.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100));
-            updateTable.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 86));
-            updateTable.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 86));
+            updateTable.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 98));
+            updateTable.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 120));
             for (var row = 0; row < 3; row++)
             {
                 updateTable.RowStyles.Add(new RowStyle(SizeType.Absolute, 22));
@@ -439,6 +441,7 @@ namespace FishXIVItemReader
             Dock = DockStyle.Fill;
 
             LoadSettings();
+            CleanupPendingUpdaterExecutable();
             pluginInitialized = true;
             SetStatus(PluginTabTitle + "已启动");
             StartInventoryWebSocketServer();
@@ -864,18 +867,17 @@ namespace FishXIVItemReader
                     update.Manifest,
                     updateDownloadDirectory,
                     updateCancellation.Token);
-                updateStatusValueLabel.Text = "正在安装更新...";
+                updateStatusValueLabel.Text = "正在准备更新...";
 
-                var installResult = await pluginUpdateService.InstallUpdateAsync(
+                var preparedInstall = await pluginUpdateService.PrepareUpdateInstallAsync(
                     updatePath,
-                    pluginDirectory,
+                    updateDownloadDirectory,
                     updateCancellation.Token);
                 updateStatusValueLabel.Text = string.Format(
-                    "已安装 {0} 个文件，重启 ACT 后生效。",
-                    installResult.InstalledFileCount);
-                latestUpdateCheckResult = null;
-                SetStatus("FishXIVItemReader 更新已安装，重启 ACT 后生效。");
-                PromptActRestart();
+                    "已准备 {0} 个文件，重启 ACT 后自动安装。",
+                    preparedInstall.PreparedFileCount);
+                SetStatus("FishXIVItemReader 更新已准备，重启 ACT 后自动安装。");
+                PromptActRestart(preparedInstall);
             }
             catch (OperationCanceledException)
             {
@@ -883,8 +885,8 @@ namespace FishXIVItemReader
             }
             catch (Exception)
             {
-                updateStatusValueLabel.Text = "安装更新失败。";
-                SetStatus("安装 FishXIVItemReader 更新失败。");
+                updateStatusValueLabel.Text = "准备更新失败。";
+                SetStatus("准备 FishXIVItemReader 更新失败。");
             }
             finally
             {
@@ -892,44 +894,212 @@ namespace FishXIVItemReader
             }
         }
 
-        private void PromptActRestart()
+        private void PromptActRestart(PluginUpdatePreparedInstallResult preparedInstall)
         {
-            const string message = "FishXIVItemReader 已更新，重启 ACT 后生效。";
-            if (TryRequestActRestart(message))
+            var response = MessageBox.Show(
+                this,
+                "FishXIVItemReader 更新已准备，需要重启 ACT 才能完成安装。" + Environment.NewLine + "是否现在重启 ACT？",
+                "FishXIVItemReader 更新",
+                MessageBoxButtons.YesNo,
+                MessageBoxIcon.Information,
+                MessageBoxDefaultButton.Button1);
+            if (response != DialogResult.Yes)
+            {
+                updateStatusValueLabel.Text = "更新已准备，尚未重启。";
+                SetStatus("FishXIVItemReader 更新已准备，尚未启动安装器。");
+                return;
+            }
+
+            try
+            {
+                StartDeferredUpdateInstaller(preparedInstall.StagingDirectory);
+                latestUpdateCheckResult = null;
+                updateStatusValueLabel.Text = "正在重启 ACT 以完成安装...";
+                SetStatus("正在重启 ACT 以完成 FishXIVItemReader 更新。");
+                CloseActForUpdate();
+            }
+            catch (Exception)
+            {
+                updateStatusValueLabel.Text = "启动安装器失败。";
+                SetStatus("启动 FishXIVItemReader 更新安装器失败。");
+            }
+        }
+
+        private void StartDeferredUpdateInstaller(string stagingDirectory)
+        {
+            if (string.IsNullOrWhiteSpace(stagingDirectory) || !Directory.Exists(stagingDirectory))
+            {
+                throw new DirectoryNotFoundException("更新暂存目录不存在。");
+            }
+
+            var updaterPath = ExtractEmbeddedUpdaterExecutable();
+            var logPath = Path.Combine(updateDownloadDirectory, "ApplyFishXIVItemReaderUpdate.log");
+            var actExecutablePath = GetCurrentProcessExecutablePath();
+            var arguments =
+                "--act-pid " + Process.GetCurrentProcess().Id +
+                " --plugin-dir " + QuoteCommandLineArgument(pluginDirectory) +
+                " --staging-dir " + QuoteCommandLineArgument(stagingDirectory) +
+                " --act-exe " + QuoteCommandLineArgument(actExecutablePath) +
+                " --log " + QuoteCommandLineArgument(logPath);
+
+            var startInfo = new ProcessStartInfo(updaterPath, arguments)
+            {
+                UseShellExecute = false,
+                CreateNoWindow = true,
+                WindowStyle = ProcessWindowStyle.Hidden
+            };
+
+            SavePendingUpdaterExecutablePath(updaterPath);
+            try
+            {
+                var process = Process.Start(startInfo);
+                if (process == null)
+                {
+                    throw new InvalidOperationException("无法启动更新安装器。");
+                }
+            }
+            catch
+            {
+                SavePendingUpdaterExecutablePath(string.Empty);
+                throw;
+            }
+        }
+
+        private string ExtractEmbeddedUpdaterExecutable()
+        {
+            Directory.CreateDirectory(updateDownloadDirectory);
+            var updaterPath = Path.Combine(
+                updateDownloadDirectory,
+                "FishXIVItemReader.Updater." + Guid.NewGuid().ToString("N") + ".exe");
+
+            using (var input = typeof(PluginMain).Assembly.GetManifestResourceStream(EmbeddedUpdaterResourceName))
+            {
+                if (input == null)
+                {
+                    throw new InvalidOperationException("内嵌更新安装器不存在。");
+                }
+
+                using (var output = new FileStream(updaterPath, FileMode.Create, FileAccess.Write, FileShare.Read))
+                {
+                    input.CopyTo(output);
+                }
+            }
+
+            return updaterPath;
+        }
+
+        private static string GetCurrentProcessExecutablePath()
+        {
+            try
+            {
+                var module = Process.GetCurrentProcess().MainModule;
+                return module == null ? string.Empty : module.FileName;
+            }
+            catch
+            {
+                return string.Empty;
+            }
+        }
+
+        private static string QuoteCommandLineArgument(string value)
+        {
+            return "\"" + (value ?? string.Empty).Replace("\"", "\\\"") + "\"";
+        }
+
+        private void SavePendingUpdaterExecutablePath(string updaterPath)
+        {
+            pendingUpdaterExecutablePath = updaterPath ?? string.Empty;
+            SaveSettings();
+        }
+
+        private void CleanupPendingUpdaterExecutable()
+        {
+            if (string.IsNullOrWhiteSpace(pendingUpdaterExecutablePath))
             {
                 return;
             }
 
-            MessageBox.Show(
-                this,
-                message + Environment.NewLine + "请手动重启 ACT。",
-                "FishXIVItemReader 更新",
-                MessageBoxButtons.OK,
-                MessageBoxIcon.Information);
+            var pendingPath = pendingUpdaterExecutablePath;
+            if (!IsSafePendingUpdaterExecutablePath(pendingPath))
+            {
+                SavePendingUpdaterExecutablePath(string.Empty);
+                return;
+            }
+
+            if (!File.Exists(pendingPath))
+            {
+                SavePendingUpdaterExecutablePath(string.Empty);
+                return;
+            }
+
+            if (TryDeletePendingUpdaterExecutable(pendingPath))
+            {
+                SavePendingUpdaterExecutablePath(string.Empty);
+            }
         }
 
-        private static bool TryRequestActRestart(string message)
+        private static bool TryDeletePendingUpdaterExecutable(string updaterPath)
+        {
+            for (var i = 0; i < 10; i++)
+            {
+                try
+                {
+                    if (!File.Exists(updaterPath))
+                    {
+                        return true;
+                    }
+
+                    File.Delete(updaterPath);
+                    return true;
+                }
+                catch (IOException)
+                {
+                }
+                catch (UnauthorizedAccessException)
+                {
+                }
+
+                Thread.Sleep(200);
+            }
+
+            return false;
+        }
+
+        private bool IsSafePendingUpdaterExecutablePath(string updaterPath)
         {
             try
             {
-                var form = ActGlobals.oFormActMain;
-                if (form == null)
-                {
-                    return false;
-                }
+                var fullPath = Path.GetFullPath(updaterPath);
+                var updateRoot = Path.GetFullPath(updateDownloadDirectory)
+                    .TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar);
+                var fileName = Path.GetFileName(fullPath);
 
-                var method = form.GetType().GetMethod("RestartACT");
-                if (method == null)
-                {
-                    return false;
-                }
-
-                method.Invoke(form, new object[] { true, message });
-                return true;
+                return fullPath.StartsWith(updateRoot + Path.DirectorySeparatorChar, StringComparison.OrdinalIgnoreCase) &&
+                       fileName.StartsWith("FishXIVItemReader.Updater.", StringComparison.OrdinalIgnoreCase) &&
+                       string.Equals(Path.GetExtension(fileName), ".exe", StringComparison.OrdinalIgnoreCase);
             }
             catch
             {
                 return false;
+            }
+        }
+
+        private static void CloseActForUpdate()
+        {
+            var form = ActGlobals.oFormActMain;
+            if (form == null)
+            {
+                Application.Exit();
+                return;
+            }
+
+            if (form.InvokeRequired)
+            {
+                form.BeginInvoke(new Action(form.Close));
+            }
+            else
+            {
+                form.Close();
             }
         }
 
@@ -1638,6 +1808,10 @@ namespace FishXIVItemReader
                                 SetConfiguredWebSocketPort(port);
                             }
                         }
+                        else if (reader.NodeType == XmlNodeType.Element && reader.LocalName == "PendingUpdaterPath")
+                        {
+                            pendingUpdaterExecutablePath = reader.ReadElementContentAsString();
+                        }
                     }
                 }
                 catch (Exception ex)
@@ -1668,6 +1842,7 @@ namespace FishXIVItemReader
                 writer.WriteElementString("ReadMode", GetSelectedReadMode().ToString());
                 writer.WriteElementString("DebugMode", debugModeCheckBox.Checked ? "true" : "false");
                 writer.WriteElementString("WebSocketPort", configuredWebSocketPort.ToString());
+                writer.WriteElementString("PendingUpdaterPath", pendingUpdaterExecutablePath ?? string.Empty);
                 writer.WriteEndElement();
                 writer.WriteEndDocument();
             }

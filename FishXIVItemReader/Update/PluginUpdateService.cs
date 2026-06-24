@@ -1,5 +1,4 @@
 using System;
-using System.Collections.Generic;
 using System.IO;
 using System.IO.Compression;
 using System.Net;
@@ -88,9 +87,9 @@ namespace FishXIVItemReader.Update
             return finalPath;
         }
 
-        public Task<PluginUpdateInstallResult> InstallUpdateAsync(
+        public Task<PluginUpdatePreparedInstallResult> PrepareUpdateInstallAsync(
             string updateArchivePath,
-            string pluginDirectory,
+            string updateWorkingDirectory,
             CancellationToken token)
         {
             if (string.IsNullOrWhiteSpace(updateArchivePath))
@@ -98,15 +97,15 @@ namespace FishXIVItemReader.Update
                 throw new ArgumentException("更新包路径异常。", "updateArchivePath");
             }
 
-            if (string.IsNullOrWhiteSpace(pluginDirectory))
+            if (string.IsNullOrWhiteSpace(updateWorkingDirectory))
             {
-                throw new ArgumentException("插件目录异常。", "pluginDirectory");
+                throw new ArgumentException("更新工作目录异常。", "updateWorkingDirectory");
             }
 
             return Task.Run(
                 delegate
                 {
-                    return InstallUpdate(updateArchivePath, pluginDirectory, token);
+                    return PrepareUpdateInstall(updateArchivePath, updateWorkingDirectory, token);
                 },
                 token);
         }
@@ -227,9 +226,9 @@ namespace FishXIVItemReader.Update
             return DefaultManifestUrl;
         }
 
-        private static PluginUpdateInstallResult InstallUpdate(
+        private static PluginUpdatePreparedInstallResult PrepareUpdateInstall(
             string updateArchivePath,
-            string pluginDirectory,
+            string updateWorkingDirectory,
             CancellationToken token)
         {
             token.ThrowIfCancellationRequested();
@@ -239,27 +238,41 @@ namespace FishXIVItemReader.Update
                 throw new FileNotFoundException("更新包不存在。", updateArchivePath);
             }
 
-            var normalizedPluginDirectory = NormalizeDirectoryPath(pluginDirectory);
-            Directory.CreateDirectory(normalizedPluginDirectory);
+            var normalizedWorkingDirectory = NormalizeDirectoryPath(updateWorkingDirectory);
+            Directory.CreateDirectory(normalizedWorkingDirectory);
 
-            var workingDirectory = Path.GetDirectoryName(updateArchivePath);
-            if (string.IsNullOrWhiteSpace(workingDirectory))
-            {
-                workingDirectory = Path.GetTempPath();
-            }
-
-            var extractDirectory = Path.Combine(
-                workingDirectory,
-                "install-" + Guid.NewGuid().ToString("N"));
+            var stagingDirectory = Path.Combine(
+                normalizedWorkingDirectory,
+                "prepared-" + Guid.NewGuid().ToString("N"));
 
             try
             {
-                ExtractPackage(updateArchivePath, extractDirectory, token);
-                return InstallExtractedPackage(extractDirectory, normalizedPluginDirectory, token);
+                ExtractPackage(updateArchivePath, stagingDirectory, token);
+
+                var extractedPluginAssembly = Path.Combine(stagingDirectory, PluginAssemblyFileName);
+                if (!File.Exists(extractedPluginAssembly))
+                {
+                    throw new InvalidOperationException("更新包缺少插件文件。");
+                }
+
+                var preparedFileCount = 0;
+                foreach (var sourceFile in Directory.GetFiles(stagingDirectory, "*", SearchOption.AllDirectories))
+                {
+                    token.ThrowIfCancellationRequested();
+
+                    var relativePath = GetRelativePath(stagingDirectory, sourceFile);
+                    if (!ShouldSkipInstallFile(relativePath))
+                    {
+                        preparedFileCount++;
+                    }
+                }
+
+                return new PluginUpdatePreparedInstallResult(stagingDirectory, preparedFileCount);
             }
-            finally
+            catch
             {
-                TryDeleteDirectory(extractDirectory);
+                TryDeleteDirectory(stagingDirectory);
+                throw;
             }
         }
 
@@ -307,150 +320,6 @@ namespace FishXIVItemReader.Update
                     }
 
                     entry.ExtractToFile(targetPath, true);
-                }
-            }
-        }
-
-        private static PluginUpdateInstallResult InstallExtractedPackage(
-            string extractDirectory,
-            string pluginDirectory,
-            CancellationToken token)
-        {
-            var extractedPluginAssembly = Path.Combine(extractDirectory, PluginAssemblyFileName);
-            if (!File.Exists(extractedPluginAssembly))
-            {
-                throw new InvalidOperationException("更新包缺少插件文件。");
-            }
-
-            var backupDirectory = Path.Combine(
-                Path.GetDirectoryName(extractDirectory) ?? Path.GetTempPath(),
-                "backup-" + Guid.NewGuid().ToString("N"));
-            var backups = new List<FileBackup>();
-            var createdFiles = new List<string>();
-            var installedFileCount = 0;
-
-            try
-            {
-                foreach (var sourceFile in Directory.GetFiles(extractDirectory, "*", SearchOption.AllDirectories))
-                {
-                    token.ThrowIfCancellationRequested();
-
-                    var relativePath = GetRelativePath(extractDirectory, sourceFile);
-                    if (ShouldSkipInstallFile(relativePath))
-                    {
-                        continue;
-                    }
-
-                    var targetFile = Path.GetFullPath(Path.Combine(pluginDirectory, relativePath));
-                    if (!IsPathInside(targetFile, pluginDirectory))
-                    {
-                        throw new InvalidOperationException("更新包路径异常。");
-                    }
-
-                    var targetParent = Path.GetDirectoryName(targetFile);
-                    if (!string.IsNullOrEmpty(targetParent))
-                    {
-                        Directory.CreateDirectory(targetParent);
-                    }
-
-                    if (File.Exists(targetFile))
-                    {
-                        var backupFile = Path.Combine(backupDirectory, relativePath);
-                        var backupParent = Path.GetDirectoryName(backupFile);
-                        if (!string.IsNullOrEmpty(backupParent))
-                        {
-                            Directory.CreateDirectory(backupParent);
-                        }
-
-                        File.Copy(targetFile, backupFile, true);
-                        backups.Add(new FileBackup(targetFile, backupFile));
-                    }
-                    else
-                    {
-                        createdFiles.Add(targetFile);
-                    }
-
-                    CopyFileWithRetry(sourceFile, targetFile, token);
-                    installedFileCount++;
-                }
-            }
-            catch
-            {
-                RestoreBackups(backups, createdFiles);
-                throw;
-            }
-            finally
-            {
-                TryDeleteDirectory(backupDirectory);
-            }
-
-            TryDeleteFile(Path.Combine(
-                pluginDirectory,
-                Path.ChangeExtension(PluginAssemblyFileName, ".pdb")));
-
-            return new PluginUpdateInstallResult(pluginDirectory, installedFileCount);
-        }
-
-        private static void CopyFileWithRetry(string sourceFile, string targetFile, CancellationToken token)
-        {
-            const int retryCount = 10;
-            const int retryDelayMs = 300;
-
-            Exception lastException = null;
-            for (var i = 0; i < retryCount; i++)
-            {
-                token.ThrowIfCancellationRequested();
-
-                try
-                {
-                    File.Copy(sourceFile, targetFile, true);
-                    return;
-                }
-                catch (IOException ex)
-                {
-                    lastException = ex;
-                }
-                catch (UnauthorizedAccessException ex)
-                {
-                    lastException = ex;
-                }
-
-                Thread.Sleep(retryDelayMs);
-            }
-
-            throw new IOException("无法覆盖插件文件，请关闭 ACT 后重试。", lastException);
-        }
-
-        private static void RestoreBackups(IEnumerable<FileBackup> backups, IEnumerable<string> createdFiles)
-        {
-            foreach (var createdFile in createdFiles)
-            {
-                try
-                {
-                    if (File.Exists(createdFile))
-                    {
-                        File.Delete(createdFile);
-                    }
-                }
-                catch
-                {
-                }
-            }
-
-            foreach (var backup in backups)
-            {
-                try
-                {
-                    var targetParent = Path.GetDirectoryName(backup.TargetFile);
-                    if (!string.IsNullOrEmpty(targetParent))
-                    {
-                        Directory.CreateDirectory(targetParent);
-                    }
-
-                    File.Copy(backup.BackupFile, backup.TargetFile, true);
-                }
-                catch
-                {
                 }
             }
         }
@@ -509,20 +378,6 @@ namespace FishXIVItemReader.Update
             }
         }
 
-        private static void TryDeleteFile(string path)
-        {
-            try
-            {
-                if (File.Exists(path))
-                {
-                    File.Delete(path);
-                }
-            }
-            catch
-            {
-            }
-        }
-
         private static string ReadEmbeddedResource(string resourceName)
         {
             var assembly = Assembly.GetExecutingAssembly();
@@ -569,17 +424,17 @@ namespace FishXIVItemReader.Update
         }
     }
 
-    public sealed class PluginUpdateInstallResult
+    public sealed class PluginUpdatePreparedInstallResult
     {
-        public PluginUpdateInstallResult(string pluginDirectory, int installedFileCount)
+        public PluginUpdatePreparedInstallResult(string stagingDirectory, int preparedFileCount)
         {
-            PluginDirectory = pluginDirectory;
-            InstalledFileCount = installedFileCount;
+            StagingDirectory = stagingDirectory;
+            PreparedFileCount = preparedFileCount;
         }
 
-        public string PluginDirectory { get; }
+        public string StagingDirectory { get; }
 
-        public int InstalledFileCount { get; }
+        public int PreparedFileCount { get; }
     }
 
     public sealed class PluginUpdateCheckResult
@@ -640,18 +495,5 @@ namespace FishXIVItemReader.Update
 
         [DataMember(Name = "manifestUrl")]
         public string ManifestUrl { get; set; }
-    }
-
-    internal sealed class FileBackup
-    {
-        public FileBackup(string targetFile, string backupFile)
-        {
-            TargetFile = targetFile;
-            BackupFile = backupFile;
-        }
-
-        public string TargetFile { get; }
-
-        public string BackupFile { get; }
     }
 }

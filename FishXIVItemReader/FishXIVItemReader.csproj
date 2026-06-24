@@ -6,6 +6,8 @@
     <RootNamespace>FishXIVItemReader</RootNamespace>
     <AssemblyName>FishXIVItemReader</AssemblyName>
     <GenerateAssemblyInfo>false</GenerateAssemblyInfo>
+    <EmbeddedUpdaterProject>..\FishXIVItemReader.Updater\FishXIVItemReader.Updater.csproj</EmbeddedUpdaterProject>
+    <EmbeddedUpdaterOutput>..\FishXIVItemReader.Updater\bin\$(Configuration)\net48\FishXIVItemReader.Updater.exe</EmbeddedUpdaterOutput>
   </PropertyGroup>
 
   <PropertyGroup>
@@ -41,5 +43,15 @@
   <Target Name="ValidateActReference" BeforeTargets="ResolveReferences">
     <Error Condition="'$(ActAssemblyPath)' == ''" Text="Set ACT_HOME, /p:ActInstallDir=..., or /p:ActAssemblyPath=... to an ACT directory or assembly path containing Advanced Combat Tracker.dll/exe." />
     <Error Condition="'$(ActAssemblyPath)' != '' and !Exists('$(ActAssemblyPath)')" Text="ACT assembly was not found at $(ActAssemblyPath)." />
+  </Target>
+
+  <Target Name="BuildEmbeddedUpdater" BeforeTargets="AssignTargetPaths">
+    <MSBuild Projects="$(EmbeddedUpdaterProject)" Targets="Restore;Build" Properties="Configuration=$(Configuration)" />
+    <Error Condition="!Exists('$(EmbeddedUpdaterOutput)')" Text="Embedded updater was not built at $(EmbeddedUpdaterOutput)." />
+    <ItemGroup>
+      <EmbeddedResource Include="$(EmbeddedUpdaterOutput)">
+        <LogicalName>FishXIVItemReader.Update.FishXIVItemReader.Updater.exe</LogicalName>
+      </EmbeddedResource>
+    </ItemGroup>
   </Target>
 </Project>
