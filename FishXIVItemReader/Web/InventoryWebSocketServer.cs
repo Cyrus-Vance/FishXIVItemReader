@@ -69,6 +69,8 @@ namespace FishXIVItemReader.Web
 
         public event Action<string> MessagePublished;
 
+        public event Action ClientCountChanged;
+
         public bool IsRunning
         {
             get
@@ -204,6 +206,7 @@ namespace FishXIVItemReader.Web
             Thread threadToJoin;
             Timer timerToDispose;
             ClientConnection[] clientsToClose;
+            bool clientCountChanged;
 
             lock (gate)
             {
@@ -212,6 +215,7 @@ namespace FishXIVItemReader.Web
                 threadToJoin = listenerThread;
                 timerToDispose = heartbeatTimer;
                 clientsToClose = clients.ToArray();
+                clientCountChanged = clients.Count > 0;
                 clients.Clear();
                 listener = null;
                 listenerThread = null;
@@ -243,6 +247,11 @@ namespace FishXIVItemReader.Web
             if (threadToJoin != null && threadToJoin.IsAlive)
             {
                 threadToJoin.Join(500);
+            }
+
+            if (clientCountChanged)
+            {
+                OnClientCountChanged();
             }
         }
 
@@ -340,6 +349,7 @@ namespace FishXIVItemReader.Web
                 {
                     clients.Add(connection);
                 }
+                OnClientCountChanged();
 
                 string snapshot;
                 bool sendSnapshot;
@@ -721,12 +731,26 @@ namespace FishXIVItemReader.Web
 
         private void RemoveClient(ClientConnection connection)
         {
+            bool removed;
             lock (gate)
             {
-                clients.Remove(connection);
+                removed = clients.Remove(connection);
             }
 
             CloseClient(connection);
+            if (removed)
+            {
+                OnClientCountChanged();
+            }
+        }
+
+        private void OnClientCountChanged()
+        {
+            var handler = ClientCountChanged;
+            if (handler != null)
+            {
+                handler();
+            }
         }
 
         private static void CloseClient(ClientConnection connection)

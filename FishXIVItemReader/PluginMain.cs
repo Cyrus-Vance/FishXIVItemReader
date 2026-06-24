@@ -43,6 +43,8 @@ namespace FishXIVItemReader
         private readonly GroupBox statusGroupBox;
         private readonly Label statusStateValueLabel;
         private readonly Label statusInventoryValueLabel;
+        private readonly Label statusWebSocketValueLabel;
+        private readonly Label statusOverlayPluginValueLabel;
         private readonly GroupBox updateGroupBox;
         private readonly Label updateCurrentValueLabel;
         private readonly Label updateLatestValueLabel;
@@ -237,7 +239,7 @@ namespace FishXIVItemReader
             {
                 Anchor = AnchorStyles.Top | AnchorStyles.Left | AnchorStyles.Right,
                 Location = new Point(18, 106),
-                Size = new Size(648, 64),
+                Size = new Size(648, 104),
                 Text = "状态"
             };
             var statusTable = new TableLayoutPanel
@@ -245,23 +247,31 @@ namespace FishXIVItemReader
                 ColumnCount = 2,
                 Dock = DockStyle.Fill,
                 Padding = new Padding(8, 8, 8, 6),
-                RowCount = 2
+                RowCount = 4
             };
             statusTable.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 74));
             statusTable.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100));
-            for (var row = 0; row < 2; row++)
+            for (var row = 0; row < 4; row++)
             {
                 statusTable.RowStyles.Add(new RowStyle(SizeType.Absolute, 17));
             }
 
             Label stateValueLabel;
             Label inventoryValueLabel;
+            Label webSocketValueLabel;
+            Label overlayPluginValueLabel;
             AddStatusRow(statusTable, 0, "状态", out stateValueLabel);
             AddStatusRow(statusTable, 1, "库存", out inventoryValueLabel);
+            AddStatusRow(statusTable, 2, "WS服务", out webSocketValueLabel);
+            AddStatusRow(statusTable, 3, "Overlay", out overlayPluginValueLabel);
             statusStateValueLabel = stateValueLabel;
             statusInventoryValueLabel = inventoryValueLabel;
+            statusWebSocketValueLabel = webSocketValueLabel;
+            statusOverlayPluginValueLabel = overlayPluginValueLabel;
             statusGroupBox.Controls.Add(statusTable);
             SetStatusPanel("未启动", "-");
+            SetStatusWebSocket("未启动", null);
+            SetStatusOverlayPlugin("未连接", null);
 
             updateGroupBox = new GroupBox
             {
@@ -413,6 +423,8 @@ namespace FishXIVItemReader
             inventoryWebSocketServer = new InventoryWebSocketServer();
             overlayPluginEventBridge = new OverlayPluginEventBridge();
             inventoryWebSocketServer.MessagePublished += overlayPluginEventBridge.PublishJson;
+            inventoryWebSocketServer.ClientCountChanged += RefreshWebSocketStatusPanel;
+            overlayPluginEventBridge.StatusChanged += SetStatusOverlayPluginFromWorker;
             Resize += delegate { LayoutControls(); };
             LayoutControls();
         }
@@ -431,6 +443,7 @@ namespace FishXIVItemReader
             SetStatus(PluginTabTitle + "已启动");
             StartInventoryWebSocketServer();
             RefreshProcessList();
+            _ = CheckPluginUpdateAsync();
         }
 
         public void DeInitPlugin()
@@ -439,7 +452,9 @@ namespace FishXIVItemReader
             SaveSettings();
             CancelUpdateOperation();
             StopAutoRead(stopNetworkReader: true);
+            inventoryWebSocketServer.ClientCountChanged -= RefreshWebSocketStatusPanel;
             inventoryWebSocketServer.MessagePublished -= overlayPluginEventBridge.PublishJson;
+            overlayPluginEventBridge.StatusChanged -= SetStatusOverlayPluginFromWorker;
             networkInventoryReader.Dispose();
             inventoryWebSocketServer.Dispose();
             overlayPluginEventBridge.Dispose();
@@ -512,7 +527,71 @@ namespace FishXIVItemReader
 
         private void SetStatusWebSocket(string webSocket, string detail)
         {
-            SetStatus(string.IsNullOrWhiteSpace(detail) ? webSocket : detail);
+            statusWebSocketValueLabel.Text = string.IsNullOrWhiteSpace(webSocket) ? "-" : webSocket;
+            if (!string.IsNullOrWhiteSpace(detail))
+            {
+                SetStatus(detail);
+            }
+        }
+
+        private void SetStatusOverlayPlugin(string overlayPlugin, string detail)
+        {
+            statusOverlayPluginValueLabel.Text = string.IsNullOrWhiteSpace(overlayPlugin) ? "-" : overlayPlugin;
+            if (!string.IsNullOrWhiteSpace(detail))
+            {
+                SetStatus(detail);
+            }
+        }
+
+        private void SetStatusOverlayPluginFromWorker(string overlayPlugin)
+        {
+            RunOnUiThread(delegate
+            {
+                SetStatusOverlayPlugin(overlayPlugin, null);
+            });
+        }
+
+        private void RefreshWebSocketStatusPanel()
+        {
+            RunOnUiThread(delegate
+            {
+                statusWebSocketValueLabel.Text = BuildWebSocketStatusText();
+            });
+        }
+
+        private string BuildWebSocketStatusText()
+        {
+            if (!inventoryWebSocketServer.IsRunning)
+            {
+                return "未启动";
+            }
+
+            return string.Format(
+                "{0}（客户端 {1}）",
+                inventoryWebSocketServer.Url,
+                inventoryWebSocketServer.ClientCount);
+        }
+
+        private void RunOnUiThread(Action action)
+        {
+            if (action == null || IsDisposed)
+            {
+                return;
+            }
+
+            if (!InvokeRequired)
+            {
+                action();
+                return;
+            }
+
+            try
+            {
+                BeginInvoke(action);
+            }
+            catch
+            {
+            }
         }
 
         private void SetNetworkDetailVisibility(bool visible)
@@ -1174,6 +1253,7 @@ namespace FishXIVItemReader
         private void RestartInventoryWebSocketServer(string successDetail)
         {
             inventoryWebSocketServer.Stop();
+            RefreshWebSocketStatusPanel();
             inventoryWebSocketServer.SetMonitoredProcess(activeAutoReadProcessId);
             StartInventoryWebSocketServer(successDetail);
         }
@@ -1190,11 +1270,13 @@ namespace FishXIVItemReader
                 inventoryWebSocketServer.Start(configuredWebSocketPort);
                 inventoryWebSocketServer.SetMonitoredProcess(activeAutoReadProcessId);
                 overlayPluginEventBridge.TryConnect();
-                SetStatusWebSocket(inventoryWebSocketServer.Url, successDetail);
+                SetStatusWebSocket(BuildWebSocketStatusText(), successDetail);
+                SetStatusOverlayPlugin(overlayPluginEventBridge.StatusText, null);
             }
             catch (Exception ex)
             {
                 SetStatusWebSocket("启动失败", "库存 WebSocket 启动失败：" + ex.Message);
+                SetStatusOverlayPlugin(overlayPluginEventBridge.StatusText, null);
             }
         }
 

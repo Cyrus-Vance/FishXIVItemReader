@@ -1,6 +1,7 @@
 using System;
 using System.Linq.Expressions;
 using System.Reflection;
+using System.Threading;
 
 namespace FishXIVItemReader.Web
 {
@@ -17,9 +18,24 @@ namespace FishXIVItemReader.Web
         private MethodInfo parseJObjectMethod;
         private object latestSnapshotJObject;
         private string latestSnapshotEventJson;
+        private string statusText = "未连接";
+        private int publishedEventCount;
         private DateTime lastInitializeAttemptUtc;
         private bool initialized;
         private bool disposed;
+
+        public event Action<string> StatusChanged;
+
+        public string StatusText
+        {
+            get
+            {
+                lock (gate)
+                {
+                    return statusText;
+                }
+            }
+        }
 
         public void TryConnect()
         {
@@ -78,16 +94,23 @@ namespace FishXIVItemReader.Web
                 }
 
                 dispatchEventMethod.Invoke(dispatcher, new[] { eventObject });
+                var publishedCount = Interlocked.Increment(ref publishedEventCount);
+                SetStatus(string.Format(
+                    "已连接：已推送 {0} 次（{1}）",
+                    publishedCount,
+                    FormatEventType(eventType)));
             }
             catch
             {
                 initialized = false;
+                SetStatus("连接异常：事件推送失败");
             }
         }
 
         public void Dispose()
         {
             disposed = true;
+            SetStatus("已停止");
         }
 
         private bool EnsureInitialized()
@@ -111,6 +134,7 @@ namespace FishXIVItemReader.Web
                 var dispatcherType = FindLoadedType("RainbowMage.OverlayPlugin.EventDispatcher");
                 if (registryType == null || dispatcherType == null)
                 {
+                    SetStatus("未连接：未检测到 OverlayPlugin");
                     return false;
                 }
 
@@ -119,12 +143,14 @@ namespace FishXIVItemReader.Web
                     BindingFlags.Public | BindingFlags.Static);
                 if (getContainerMethod == null)
                 {
+                    SetStatus("未连接：OverlayPlugin 接口不可用");
                     return false;
                 }
 
                 var container = getContainerMethod.Invoke(null, null);
                 if (container == null)
                 {
+                    SetStatus("未连接：OverlayPlugin 容器不可用");
                     return false;
                 }
 
@@ -133,12 +159,14 @@ namespace FishXIVItemReader.Web
                     new[] { typeof(Type) });
                 if (resolveMethod == null)
                 {
+                    SetStatus("未连接：OverlayPlugin 容器不可用");
                     return false;
                 }
 
                 var resolvedDispatcher = resolveMethod.Invoke(container, new object[] { dispatcherType });
                 if (resolvedDispatcher == null)
                 {
+                    SetStatus("未连接：OverlayPlugin 事件分发器不可用");
                     return false;
                 }
 
@@ -147,6 +175,7 @@ namespace FishXIVItemReader.Web
                     BindingFlags.Public | BindingFlags.Instance);
                 if (resolvedDispatchMethod == null)
                 {
+                    SetStatus("未连接：OverlayPlugin 事件接口不可用");
                     return false;
                 }
 
@@ -159,6 +188,7 @@ namespace FishXIVItemReader.Web
                     null);
                 if (resolvedParseMethod == null)
                 {
+                    SetStatus("未连接：OverlayPlugin JSON 接口不可用");
                     return false;
                 }
 
@@ -171,12 +201,14 @@ namespace FishXIVItemReader.Web
                 RestoreLatestSnapshotCache();
 
                 initialized = true;
+                SetStatus("已连接：事件推送可用");
                 return true;
             }
             catch
             {
                 initialized = false;
                 dispatcher = null;
+                SetStatus("连接异常：初始化失败");
                 return false;
             }
         }
@@ -356,6 +388,41 @@ namespace FishXIVItemReader.Web
             }
 
             return "{\"type\":\"" + eventType + "\"," + trimmed.Substring(1);
+        }
+
+        private void SetStatus(string value)
+        {
+            Action<string> handler = null;
+            lock (gate)
+            {
+                if (string.Equals(statusText, value, StringComparison.Ordinal))
+                {
+                    return;
+                }
+
+                statusText = value;
+                handler = StatusChanged;
+            }
+
+            if (handler != null)
+            {
+                handler(value);
+            }
+        }
+
+        private static string FormatEventType(string eventType)
+        {
+            if (string.Equals(eventType, PingEventType, StringComparison.Ordinal))
+            {
+                return "Ping";
+            }
+
+            if (string.Equals(eventType, InventorySnapshotEventType, StringComparison.Ordinal))
+            {
+                return "库存";
+            }
+
+            return "事件";
         }
     }
 }
