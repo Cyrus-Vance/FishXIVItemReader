@@ -545,7 +545,7 @@ namespace FishXIVItemReader
 
         private void SetStatusOverlayPlugin(string overlayPlugin, string detail)
         {
-            statusOverlayPluginValueLabel.Text = string.IsNullOrWhiteSpace(overlayPlugin) ? "-" : overlayPlugin;
+            statusOverlayPluginValueLabel.Text = FormatOverlayPluginStatusText(overlayPlugin);
             if (!string.IsNullOrWhiteSpace(detail))
             {
                 SetStatus(detail);
@@ -576,9 +576,33 @@ namespace FishXIVItemReader
             }
 
             return string.Format(
-                "{0}（客户端 {1}）",
-                inventoryWebSocketServer.Url,
+                "客户端 {0}",
                 inventoryWebSocketServer.ClientCount);
+        }
+
+        private static string FormatOverlayPluginStatusText(string overlayPlugin)
+        {
+            if (string.IsNullOrWhiteSpace(overlayPlugin))
+            {
+                return "-";
+            }
+
+            if (overlayPlugin.StartsWith("已连接", StringComparison.Ordinal))
+            {
+                return "已连接";
+            }
+
+            if (overlayPlugin.StartsWith("未连接", StringComparison.Ordinal))
+            {
+                return "未连接";
+            }
+
+            if (overlayPlugin.StartsWith("连接异常", StringComparison.Ordinal))
+            {
+                return "连接异常";
+            }
+
+            return overlayPlugin;
         }
 
         private void RunOnUiThread(Action action)
