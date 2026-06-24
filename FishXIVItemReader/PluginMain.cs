@@ -72,7 +72,7 @@ namespace FishXIVItemReader
         private SettingsSerializer settings;
         private readonly string settingsFile;
         private readonly string updateDownloadDirectory;
-        private readonly string pluginDirectory;
+        private string pluginDirectory;
         private CancellationTokenSource autoReadCancellation;
         private Task autoReadTask;
         private CancellationTokenSource updateCancellation;
@@ -443,6 +443,7 @@ namespace FishXIVItemReader
             Dock = DockStyle.Fill;
 
             LoadSettings();
+            pluginDirectory = ResolvePluginDirectory();
             CleanupPendingUpdaterExecutable();
             pluginInitialized = true;
             SetStatus(PluginTabTitle + "已启动");
@@ -932,25 +933,10 @@ namespace FishXIVItemReader
                 return;
             }
 
-            updateStatusValueLabel.Text = "直接安装失败，将在重启 ACT 时安装。";
-            SetStatus("FishXIVItemReader 直接覆盖更新失败，已切换为重启后安装。");
-
-            var response = MessageBox.Show(
-                this,
-                "FishXIVItemReader 更新已准备，但当前插件文件无法直接覆盖，需要关闭 ACT 后安装。" + Environment.NewLine + "是否现在重启 ACT？",
-                "FishXIVItemReader 更新",
-                MessageBoxButtons.YesNo,
-                MessageBoxIcon.Information,
-                MessageBoxDefaultButton.Button1);
-            if (response != DialogResult.Yes)
-            {
-                updateStatusValueLabel.Text = "更新已准备，尚未重启。";
-                SetStatus("FishXIVItemReader 更新已准备，尚未启动安装器。");
-                return;
-            }
-
             try
             {
+                updateStatusValueLabel.Text = "插件文件正在使用，将关闭 ACT 后安装...";
+                SetStatus("FishXIVItemReader 插件文件正在使用，已切换为关闭 ACT 后安装。");
                 StartDeferredUpdateInstaller(preparedInstall.StagingDirectory, true);
                 latestUpdateCheckResult = null;
                 updateStatusValueLabel.Text = "正在重启 ACT 以完成安装...";
@@ -972,6 +958,12 @@ namespace FishXIVItemReader
             }
 
             SavePendingUpdateStagingDirectory(stagingDirectory);
+            pluginDirectory = ResolvePluginDirectory();
+            if (string.IsNullOrWhiteSpace(pluginDirectory))
+            {
+                throw new InvalidOperationException("插件目录异常。");
+            }
+
             var updaterPath = ExtractEmbeddedUpdaterExecutable();
             var logPath = Path.Combine(updateDownloadDirectory, "ApplyFishXIVItemReaderUpdate.log");
             var actExecutablePath = GetCurrentProcessExecutablePath();
@@ -1210,9 +1202,37 @@ namespace FishXIVItemReader
                 return false;
             }
 
+            if (IsPendingUpdateAlreadyApplied(stagingDirectory))
+            {
+                TryDeleteDirectory(stagingDirectory);
+                SavePendingUpdateStagingDirectory(string.Empty);
+                updateStatusValueLabel.Text = "更新已完成。";
+                SetStatus("FishXIVItemReader 待安装更新已完成。");
+                return false;
+            }
+
             updateStatusValueLabel.Text = "检测到待完成更新，请关闭 ACT 后完成安装。";
             SetStatus("检测到 FishXIVItemReader 待完成更新，关闭 ACT 后将继续安装。");
             return true;
+        }
+
+        private bool IsPendingUpdateAlreadyApplied(string stagingDirectory)
+        {
+            try
+            {
+                var stagedAssemblyPath = Path.Combine(stagingDirectory, "FishXIVItemReader.dll");
+                if (!File.Exists(stagedAssemblyPath))
+                {
+                    return false;
+                }
+
+                var stagedVersion = AssemblyName.GetAssemblyName(stagedAssemblyPath).Version;
+                return stagedVersion != null && stagedVersion.CompareTo(pluginUpdateService.CurrentVersion) <= 0;
+            }
+            catch
+            {
+                return false;
+            }
         }
 
         private void StartPendingUpdateInstallerForShutdown()
@@ -1316,6 +1336,20 @@ namespace FishXIVItemReader
             catch
             {
                 return false;
+            }
+        }
+
+        private static void TryDeleteDirectory(string directory)
+        {
+            try
+            {
+                if (Directory.Exists(directory))
+                {
+                    Directory.Delete(directory, true);
+                }
+            }
+            catch
+            {
             }
         }
 
@@ -2005,7 +2039,55 @@ namespace FishXIVItemReader
                 statusLabel.Text = text;
         }
 
-        private static string ResolvePluginDirectory()
+        private string ResolvePluginDirectory()
+        {
+            var actPluginDirectory = ResolvePluginDirectoryFromAct();
+            if (!string.IsNullOrWhiteSpace(actPluginDirectory))
+            {
+                return actPluginDirectory;
+            }
+
+            return ResolvePluginDirectoryFromAssembly();
+        }
+
+        private string ResolvePluginDirectoryFromAct()
+        {
+            try
+            {
+                var plugins = ActGlobals.oFormActMain == null ? null : ActGlobals.oFormActMain.ActPlugins;
+                if (plugins == null)
+                {
+                    return string.Empty;
+                }
+
+                foreach (var plugin in plugins)
+                {
+                    if (plugin == null || !ReferenceEquals(plugin.pluginObj, this) || plugin.pluginFile == null)
+                    {
+                        continue;
+                    }
+
+                    var fullName = plugin.pluginFile.FullName;
+                    if (string.IsNullOrWhiteSpace(fullName))
+                    {
+                        continue;
+                    }
+
+                    var directory = Path.GetDirectoryName(fullName);
+                    if (!string.IsNullOrWhiteSpace(directory))
+                    {
+                        return directory;
+                    }
+                }
+            }
+            catch
+            {
+            }
+
+            return string.Empty;
+        }
+
+        private static string ResolvePluginDirectoryFromAssembly()
         {
             var location = typeof(PluginMain).Assembly.Location;
             if (string.IsNullOrWhiteSpace(location))
