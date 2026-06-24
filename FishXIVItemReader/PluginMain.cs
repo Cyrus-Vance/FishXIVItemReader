@@ -935,37 +935,9 @@ namespace FishXIVItemReader
             updateStatusValueLabel.Text = "直接安装失败，将在重启 ACT 时安装。";
             SetStatus("FishXIVItemReader 直接覆盖更新失败，已切换为重启后安装。");
 
-            var restartMethod = FindActRestartMethod();
-            if (restartMethod != null)
-            {
-                try
-                {
-                    StartDeferredUpdateInstaller(preparedInstall.StagingDirectory, false);
-                    latestUpdateCheckResult = null;
-                    updateStatusValueLabel.Text = "等待 ACT 官方重启确认...";
-                    SetStatus("FishXIVItemReader 更新已准备，等待 ACT 官方重启确认。");
-
-                    if (!TryRequestActRestart(
-                            restartMethod,
-                            "FishXIVItemReader 更新已准备，需要重启 ACT 才能完成安装。"))
-                    {
-                        updateStatusValueLabel.Text = "更新已准备，请手动重启 ACT。";
-                        SetStatus("FishXIVItemReader 更新已准备，请手动重启 ACT 以完成安装。");
-                    }
-
-                    return;
-                }
-                catch (Exception)
-                {
-                    updateStatusValueLabel.Text = "启动安装器失败。";
-                    SetStatus("启动 FishXIVItemReader 更新安装器失败。");
-                    return;
-                }
-            }
-
             var response = MessageBox.Show(
                 this,
-                "FishXIVItemReader 更新已准备，需要重启 ACT 才能完成安装。" + Environment.NewLine + "是否现在重启 ACT？",
+                "FishXIVItemReader 更新已准备，但当前插件文件无法直接覆盖，需要关闭 ACT 后安装。" + Environment.NewLine + "是否现在重启 ACT？",
                 "FishXIVItemReader 更新",
                 MessageBoxButtons.YesNo,
                 MessageBoxIcon.Information,
@@ -1238,9 +1210,8 @@ namespace FishXIVItemReader
                 return false;
             }
 
-            updateStatusValueLabel.Text = "检测到待完成更新，正在继续...";
-            SetStatus("检测到 FishXIVItemReader 待完成更新，正在继续安装流程。");
-            PromptActRestart(new PluginUpdatePreparedInstallResult(stagingDirectory, 0));
+            updateStatusValueLabel.Text = "检测到待完成更新，请关闭 ACT 后完成安装。";
+            SetStatus("检测到 FishXIVItemReader 待完成更新，关闭 ACT 后将继续安装。");
             return true;
         }
 
