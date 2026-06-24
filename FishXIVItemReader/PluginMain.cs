@@ -69,6 +69,7 @@ namespace FishXIVItemReader
         private SettingsSerializer settings;
         private readonly string settingsFile;
         private readonly string updateDownloadDirectory;
+        private readonly string pluginDirectory;
         private CancellationTokenSource autoReadCancellation;
         private Task autoReadTask;
         private CancellationTokenSource updateCancellation;
@@ -94,6 +95,7 @@ namespace FishXIVItemReader
                 "Config",
                 "FishXIVItemReader",
                 "Updates");
+            pluginDirectory = ResolvePluginDirectory();
             pluginUpdateService = new PluginUpdateService();
 
             processLabel = new Label
@@ -310,7 +312,7 @@ namespace FishXIVItemReader
                 Dock = DockStyle.Fill,
                 Enabled = false,
                 Margin = new Padding(6, 0, 0, 2),
-                Text = "下载更新"
+                Text = "下载并安装"
             };
             downloadUpdateButton.Click += async delegate { await DownloadPluginUpdateAsync(); };
             updateTable.Controls.Add(checkUpdateButton, 2, 0);
@@ -739,7 +741,7 @@ namespace FishXIVItemReader
                 latestUpdateCheckResult = result;
                 updateLatestValueLabel.Text = PluginUpdateService.FormatVersion(result.LatestVersion);
                 updateStatusValueLabel.Text = result.UpdateAvailable
-                    ? "发现新版本，可以下载。"
+                    ? "发现新版本，可以下载并安装。"
                     : "已是最新版本。";
                 SetStatus(result.UpdateAvailable
                     ? "发现 FishXIVItemReader 新版本。"
@@ -783,8 +785,18 @@ namespace FishXIVItemReader
                     update.Manifest,
                     updateDownloadDirectory,
                     updateCancellation.Token);
-                updateStatusValueLabel.Text = "已下载：" + updatePath;
-                SetStatus("FishXIVItemReader 更新包已下载。请关闭 ACT 后手动替换插件文件。");
+                updateStatusValueLabel.Text = "正在安装更新...";
+
+                var installResult = await pluginUpdateService.InstallUpdateAsync(
+                    updatePath,
+                    pluginDirectory,
+                    updateCancellation.Token);
+                updateStatusValueLabel.Text = string.Format(
+                    "已安装 {0} 个文件，重启 ACT 后生效。",
+                    installResult.InstalledFileCount);
+                latestUpdateCheckResult = null;
+                SetStatus("FishXIVItemReader 更新已安装，重启 ACT 后生效。");
+                PromptActRestart();
             }
             catch (OperationCanceledException)
             {
@@ -792,12 +804,53 @@ namespace FishXIVItemReader
             }
             catch (Exception)
             {
-                updateStatusValueLabel.Text = "下载更新失败。";
-                SetStatus("下载 FishXIVItemReader 更新失败。");
+                updateStatusValueLabel.Text = "安装更新失败。";
+                SetStatus("安装 FishXIVItemReader 更新失败。");
             }
             finally
             {
                 EndUpdateOperation();
+            }
+        }
+
+        private void PromptActRestart()
+        {
+            const string message = "FishXIVItemReader 已更新，重启 ACT 后生效。";
+            if (TryRequestActRestart(message))
+            {
+                return;
+            }
+
+            MessageBox.Show(
+                this,
+                message + Environment.NewLine + "请手动重启 ACT。",
+                "FishXIVItemReader 更新",
+                MessageBoxButtons.OK,
+                MessageBoxIcon.Information);
+        }
+
+        private static bool TryRequestActRestart(string message)
+        {
+            try
+            {
+                var form = ActGlobals.oFormActMain;
+                if (form == null)
+                {
+                    return false;
+                }
+
+                var method = form.GetType().GetMethod("RestartACT");
+                if (method == null)
+                {
+                    return false;
+                }
+
+                method.Invoke(form, new object[] { true, message });
+                return true;
+            }
+            catch
+            {
+                return false;
             }
         }
 
@@ -1453,6 +1506,17 @@ namespace FishXIVItemReader
         {
             if (statusLabel != null)
                 statusLabel.Text = text;
+        }
+
+        private static string ResolvePluginDirectory()
+        {
+            var location = typeof(PluginMain).Assembly.Location;
+            if (string.IsNullOrWhiteSpace(location))
+            {
+                return string.Empty;
+            }
+
+            return Path.GetDirectoryName(location) ?? string.Empty;
         }
 
         private void LoadSettings()

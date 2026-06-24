@@ -581,6 +581,7 @@ class Build : NukeBuild
 
         return string.Equals(fileName, "Advanced Combat Tracker.dll", StringComparison.OrdinalIgnoreCase)
             || string.Equals(fileName, "Advanced Combat Tracker.exe", StringComparison.OrdinalIgnoreCase)
+            || string.Equals(Path.GetExtension(fileName), ".pdb", StringComparison.OrdinalIgnoreCase)
             || string.Equals(Path.GetExtension(fileName), ".zip", StringComparison.OrdinalIgnoreCase);
     }
 

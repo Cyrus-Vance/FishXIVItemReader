@@ -28,6 +28,9 @@
   </ItemGroup>
 
   <ItemGroup>
+    <Reference Include="System.IO.Compression" />
+    <Reference Include="System.IO.Compression.FileSystem" />
+
     <Reference Include="Advanced Combat Tracker" Condition="'$(ActAssemblyPath)' != ''">
       <HintPath>$(ActAssemblyPath)</HintPath>
       <Private>False</Private>

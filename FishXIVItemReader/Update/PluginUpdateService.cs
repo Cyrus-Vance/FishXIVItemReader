@@ -1,5 +1,7 @@
 using System;
+using System.Collections.Generic;
 using System.IO;
+using System.IO.Compression;
 using System.Net;
 using System.Reflection;
 using System.Runtime.Serialization;
@@ -15,6 +17,7 @@ namespace FishXIVItemReader.Update
     {
         private const string UpdateSourceResourceName = "FishXIVItemReader.Update.UpdateSource.json";
         private const string DefaultManifestUrl = "https://raw.githubusercontent.com/Cyrus-Vance/FishXIVItemReader/main/FishXIVItemReader/Update/FishXIVItemReader.update.json";
+        private const string PluginAssemblyFileName = "FishXIVItemReader.dll";
         private const int BufferSize = 81920;
 
         public PluginUpdateService()
@@ -83,6 +86,29 @@ namespace FishXIVItemReader.Update
 
             File.Move(tempPath, finalPath);
             return finalPath;
+        }
+
+        public Task<PluginUpdateInstallResult> InstallUpdateAsync(
+            string updateArchivePath,
+            string pluginDirectory,
+            CancellationToken token)
+        {
+            if (string.IsNullOrWhiteSpace(updateArchivePath))
+            {
+                throw new ArgumentException("更新包路径异常。", "updateArchivePath");
+            }
+
+            if (string.IsNullOrWhiteSpace(pluginDirectory))
+            {
+                throw new ArgumentException("插件目录异常。", "pluginDirectory");
+            }
+
+            return Task.Run(
+                delegate
+                {
+                    return InstallUpdate(updateArchivePath, pluginDirectory, token);
+                },
+                token);
         }
 
         public static string FormatVersion(Version version)
@@ -201,6 +227,302 @@ namespace FishXIVItemReader.Update
             return DefaultManifestUrl;
         }
 
+        private static PluginUpdateInstallResult InstallUpdate(
+            string updateArchivePath,
+            string pluginDirectory,
+            CancellationToken token)
+        {
+            token.ThrowIfCancellationRequested();
+
+            if (!File.Exists(updateArchivePath))
+            {
+                throw new FileNotFoundException("更新包不存在。", updateArchivePath);
+            }
+
+            var normalizedPluginDirectory = NormalizeDirectoryPath(pluginDirectory);
+            Directory.CreateDirectory(normalizedPluginDirectory);
+
+            var workingDirectory = Path.GetDirectoryName(updateArchivePath);
+            if (string.IsNullOrWhiteSpace(workingDirectory))
+            {
+                workingDirectory = Path.GetTempPath();
+            }
+
+            var extractDirectory = Path.Combine(
+                workingDirectory,
+                "install-" + Guid.NewGuid().ToString("N"));
+
+            try
+            {
+                ExtractPackage(updateArchivePath, extractDirectory, token);
+                return InstallExtractedPackage(extractDirectory, normalizedPluginDirectory, token);
+            }
+            finally
+            {
+                TryDeleteDirectory(extractDirectory);
+            }
+        }
+
+        private static void ExtractPackage(
+            string updateArchivePath,
+            string extractDirectory,
+            CancellationToken token)
+        {
+            Directory.CreateDirectory(extractDirectory);
+            var normalizedExtractDirectory = NormalizeDirectoryPath(extractDirectory);
+
+            using (var archive = ZipFile.OpenRead(updateArchivePath))
+            {
+                foreach (var entry in archive.Entries)
+                {
+                    token.ThrowIfCancellationRequested();
+
+                    if (string.IsNullOrWhiteSpace(entry.FullName))
+                    {
+                        continue;
+                    }
+
+                    var entryName = entry.FullName.Replace('\\', '/');
+                    if (Path.IsPathRooted(entryName))
+                    {
+                        throw new InvalidOperationException("更新包路径异常。");
+                    }
+
+                    var targetPath = Path.GetFullPath(Path.Combine(normalizedExtractDirectory, entryName));
+                    if (!IsPathInside(targetPath, normalizedExtractDirectory))
+                    {
+                        throw new InvalidOperationException("更新包路径异常。");
+                    }
+
+                    if (string.IsNullOrEmpty(entry.Name))
+                    {
+                        Directory.CreateDirectory(targetPath);
+                        continue;
+                    }
+
+                    var parent = Path.GetDirectoryName(targetPath);
+                    if (!string.IsNullOrEmpty(parent))
+                    {
+                        Directory.CreateDirectory(parent);
+                    }
+
+                    entry.ExtractToFile(targetPath, true);
+                }
+            }
+        }
+
+        private static PluginUpdateInstallResult InstallExtractedPackage(
+            string extractDirectory,
+            string pluginDirectory,
+            CancellationToken token)
+        {
+            var extractedPluginAssembly = Path.Combine(extractDirectory, PluginAssemblyFileName);
+            if (!File.Exists(extractedPluginAssembly))
+            {
+                throw new InvalidOperationException("更新包缺少插件文件。");
+            }
+
+            var backupDirectory = Path.Combine(
+                Path.GetDirectoryName(extractDirectory) ?? Path.GetTempPath(),
+                "backup-" + Guid.NewGuid().ToString("N"));
+            var backups = new List<FileBackup>();
+            var createdFiles = new List<string>();
+            var installedFileCount = 0;
+
+            try
+            {
+                foreach (var sourceFile in Directory.GetFiles(extractDirectory, "*", SearchOption.AllDirectories))
+                {
+                    token.ThrowIfCancellationRequested();
+
+                    var relativePath = GetRelativePath(extractDirectory, sourceFile);
+                    if (ShouldSkipInstallFile(relativePath))
+                    {
+                        continue;
+                    }
+
+                    var targetFile = Path.GetFullPath(Path.Combine(pluginDirectory, relativePath));
+                    if (!IsPathInside(targetFile, pluginDirectory))
+                    {
+                        throw new InvalidOperationException("更新包路径异常。");
+                    }
+
+                    var targetParent = Path.GetDirectoryName(targetFile);
+                    if (!string.IsNullOrEmpty(targetParent))
+                    {
+                        Directory.CreateDirectory(targetParent);
+                    }
+
+                    if (File.Exists(targetFile))
+                    {
+                        var backupFile = Path.Combine(backupDirectory, relativePath);
+                        var backupParent = Path.GetDirectoryName(backupFile);
+                        if (!string.IsNullOrEmpty(backupParent))
+                        {
+                            Directory.CreateDirectory(backupParent);
+                        }
+
+                        File.Copy(targetFile, backupFile, true);
+                        backups.Add(new FileBackup(targetFile, backupFile));
+                    }
+                    else
+                    {
+                        createdFiles.Add(targetFile);
+                    }
+
+                    CopyFileWithRetry(sourceFile, targetFile, token);
+                    installedFileCount++;
+                }
+            }
+            catch
+            {
+                RestoreBackups(backups, createdFiles);
+                throw;
+            }
+            finally
+            {
+                TryDeleteDirectory(backupDirectory);
+            }
+
+            TryDeleteFile(Path.Combine(
+                pluginDirectory,
+                Path.ChangeExtension(PluginAssemblyFileName, ".pdb")));
+
+            return new PluginUpdateInstallResult(pluginDirectory, installedFileCount);
+        }
+
+        private static void CopyFileWithRetry(string sourceFile, string targetFile, CancellationToken token)
+        {
+            const int retryCount = 10;
+            const int retryDelayMs = 300;
+
+            Exception lastException = null;
+            for (var i = 0; i < retryCount; i++)
+            {
+                token.ThrowIfCancellationRequested();
+
+                try
+                {
+                    File.Copy(sourceFile, targetFile, true);
+                    return;
+                }
+                catch (IOException ex)
+                {
+                    lastException = ex;
+                }
+                catch (UnauthorizedAccessException ex)
+                {
+                    lastException = ex;
+                }
+
+                Thread.Sleep(retryDelayMs);
+            }
+
+            throw new IOException("无法覆盖插件文件，请关闭 ACT 后重试。", lastException);
+        }
+
+        private static void RestoreBackups(IEnumerable<FileBackup> backups, IEnumerable<string> createdFiles)
+        {
+            foreach (var createdFile in createdFiles)
+            {
+                try
+                {
+                    if (File.Exists(createdFile))
+                    {
+                        File.Delete(createdFile);
+                    }
+                }
+                catch
+                {
+                }
+            }
+
+            foreach (var backup in backups)
+            {
+                try
+                {
+                    var targetParent = Path.GetDirectoryName(backup.TargetFile);
+                    if (!string.IsNullOrEmpty(targetParent))
+                    {
+                        Directory.CreateDirectory(targetParent);
+                    }
+
+                    File.Copy(backup.BackupFile, backup.TargetFile, true);
+                }
+                catch
+                {
+                }
+            }
+        }
+
+        private static bool ShouldSkipInstallFile(string relativePath)
+        {
+            return string.Equals(Path.GetExtension(relativePath), ".pdb", StringComparison.OrdinalIgnoreCase);
+        }
+
+        private static string GetRelativePath(string baseDirectory, string path)
+        {
+            var normalizedBaseDirectory = NormalizeDirectoryPath(baseDirectory);
+            var normalizedPath = Path.GetFullPath(path);
+            if (string.Equals(normalizedBaseDirectory, normalizedPath, StringComparison.OrdinalIgnoreCase))
+            {
+                return string.Empty;
+            }
+
+            var prefix = normalizedBaseDirectory + Path.DirectorySeparatorChar;
+            if (!normalizedPath.StartsWith(prefix, StringComparison.OrdinalIgnoreCase))
+            {
+                throw new InvalidOperationException("路径不在预期目录中。");
+            }
+
+            return normalizedPath.Substring(prefix.Length);
+        }
+
+        private static bool IsPathInside(string path, string root)
+        {
+            var normalizedPath = Path.GetFullPath(path);
+            var normalizedRoot = NormalizeDirectoryPath(root);
+
+            return string.Equals(normalizedPath, normalizedRoot, StringComparison.OrdinalIgnoreCase) ||
+                   normalizedPath.StartsWith(
+                       normalizedRoot + Path.DirectorySeparatorChar,
+                       StringComparison.OrdinalIgnoreCase);
+        }
+
+        private static string NormalizeDirectoryPath(string path)
+        {
+            return Path.GetFullPath(path)
+                .TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar);
+        }
+
+        private static void TryDeleteDirectory(string directory)
+        {
+            try
+            {
+                if (Directory.Exists(directory))
+                {
+                    Directory.Delete(directory, true);
+                }
+            }
+            catch
+            {
+            }
+        }
+
+        private static void TryDeleteFile(string path)
+        {
+            try
+            {
+                if (File.Exists(path))
+                {
+                    File.Delete(path);
+                }
+            }
+            catch
+            {
+            }
+        }
+
         private static string ReadEmbeddedResource(string resourceName)
         {
             var assembly = Assembly.GetExecutingAssembly();
@@ -245,6 +567,19 @@ namespace FishXIVItemReader.Update
 
             return sb.ToString();
         }
+    }
+
+    public sealed class PluginUpdateInstallResult
+    {
+        public PluginUpdateInstallResult(string pluginDirectory, int installedFileCount)
+        {
+            PluginDirectory = pluginDirectory;
+            InstalledFileCount = installedFileCount;
+        }
+
+        public string PluginDirectory { get; }
+
+        public int InstalledFileCount { get; }
     }
 
     public sealed class PluginUpdateCheckResult
@@ -305,5 +640,18 @@ namespace FishXIVItemReader.Update
 
         [DataMember(Name = "manifestUrl")]
         public string ManifestUrl { get; set; }
+    }
+
+    internal sealed class FileBackup
+    {
+        public FileBackup(string targetFile, string backupFile)
+        {
+            TargetFile = targetFile;
+            BackupFile = backupFile;
+        }
+
+        public string TargetFile { get; }
+
+        public string BackupFile { get; }
     }
 }
