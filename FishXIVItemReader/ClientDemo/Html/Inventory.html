@@ -1,0 +1,1114 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>鲜鱼库存管理</title>
+  <style>
+    :root {
+      color-scheme: dark;
+      --bg: #101214;
+      --panel: #181c20;
+      --panel-2: #12161a;
+      --border: #2b333b;
+      --border-strong: #39434c;
+      --text: #e8eef2;
+      --muted: #99a6b2;
+      --accent: #39a4b8;
+      --green: #22a06b;
+      --yellow: #b7791f;
+      --red: #c2413a;
+    }
+
+    * { box-sizing: border-box; }
+
+    body {
+      margin: 0;
+      min-width: 980px;
+      background: var(--bg);
+      color: var(--text);
+      font-family: "Microsoft YaHei UI", "Segoe UI", system-ui, sans-serif;
+    }
+
+    button,
+    input {
+      font: inherit;
+      min-width: 0;
+    }
+
+    button {
+      min-height: 34px;
+      border: 1px solid var(--border-strong);
+      border-radius: 6px;
+      background: #20262c;
+      color: var(--text);
+      padding: 7px 12px;
+      cursor: default;
+    }
+
+    button:hover:not(:disabled) {
+      border-color: var(--accent);
+      background: #263039;
+    }
+
+    button.primary {
+      border-color: #2f91a5;
+      background: #2f91a5;
+      font-weight: 600;
+    }
+
+    input {
+      min-height: 34px;
+      border: 1px solid var(--border-strong);
+      border-radius: 6px;
+      background: #0f1215;
+      color: var(--text);
+      padding: 7px 10px;
+    }
+
+    h1,
+    h2 {
+      margin: 0;
+      letter-spacing: 0;
+    }
+
+    h1 {
+      font-size: 26px;
+      font-weight: 650;
+    }
+
+    h2 {
+      font-size: 17px;
+      font-weight: 650;
+    }
+
+    .gm-shell {
+      min-height: 100vh;
+      padding: 22px;
+      max-width: 100%;
+      overflow-x: clip;
+    }
+
+    .gm-topbar {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 18px;
+      margin-bottom: 18px;
+    }
+
+    .brand-block {
+      display: flex;
+      align-items: center;
+      gap: 13px;
+      min-width: 0;
+    }
+
+    .brand-mark {
+      width: 42px;
+      height: 42px;
+      display: grid;
+      place-items: center;
+      border: 1px solid #36505d;
+      border-radius: 8px;
+      background: linear-gradient(145deg, #24313a, #12171c);
+      color: #85d9e7;
+      font-weight: 800;
+      letter-spacing: 0;
+    }
+
+    .muted,
+    .panel-subtitle {
+      color: var(--muted);
+      font-size: 12px;
+    }
+
+    .topbar-actions,
+    .toolbar,
+    .row-actions {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      min-width: 0;
+    }
+
+    .ws-controls {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      min-width: 0;
+    }
+
+    .ws-controls.hidden {
+      display: none;
+    }
+
+    .ws-input {
+      width: 310px;
+    }
+
+    .status-pill {
+      display: inline-flex;
+      align-items: center;
+      gap: 7px;
+      min-height: 34px;
+      padding: 7px 10px;
+      border: 1px solid var(--border);
+      border-radius: 6px;
+      background: #14191e;
+      color: var(--muted);
+      font-size: 13px;
+      white-space: nowrap;
+    }
+
+    .dot {
+      width: 8px;
+      height: 8px;
+      border-radius: 999px;
+      background: var(--red);
+      box-shadow: 0 0 0 3px rgba(194, 65, 58, .14);
+    }
+
+    .dot.online {
+      background: var(--green);
+      box-shadow: 0 0 0 3px rgba(34, 160, 107, .14);
+    }
+
+    .inventory-window {
+      min-height: calc(100vh - 112px);
+      min-width: 0;
+      display: flex;
+      flex-direction: column;
+      padding: 14px;
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      background:
+        linear-gradient(180deg, rgba(43, 56, 68, .34), rgba(18, 22, 26, .12)),
+        var(--panel);
+    }
+
+    .inventory-window-header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 12px;
+      min-width: 0;
+      margin-bottom: 14px;
+      padding-bottom: 12px;
+      border-bottom: 1px solid #252f38;
+    }
+
+    .stat-strip {
+      display: grid;
+      grid-template-columns: repeat(2, minmax(110px, 1fr));
+      gap: 10px;
+      margin-bottom: 14px;
+    }
+
+    .stat {
+      min-width: 0;
+      padding: 10px 12px;
+      border: 1px solid #222a31;
+      border-radius: 6px;
+      background: var(--panel-2);
+    }
+
+    .stat span {
+      display: block;
+      color: var(--muted);
+      font-size: 12px;
+    }
+
+    .stat strong {
+      display: block;
+      margin-top: 5px;
+      font-size: 18px;
+      font-weight: 650;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+
+    .inventory-editor-grid {
+      flex: 1;
+      min-height: 0;
+      min-width: 0;
+      display: grid;
+      grid-template-columns: max-content minmax(360px, 1fr);
+      gap: 14px;
+    }
+
+    .panel {
+      min-height: 0;
+      min-width: 0;
+      padding: 14px;
+      display: flex;
+      flex-direction: column;
+      border: 1px solid #222a31;
+      border-radius: 6px;
+      background: var(--panel-2);
+    }
+
+    .panel-header {
+      display: flex;
+      align-items: flex-start;
+      justify-content: space-between;
+      gap: 12px;
+      margin-bottom: 12px;
+      min-width: 0;
+    }
+
+    .inventory-panel {
+      inline-size: max-content;
+      max-inline-size: 100%;
+    }
+
+    .inventory-search {
+      width: 100%;
+    }
+
+    .bag-empty {
+      min-height: 180px;
+      display: grid;
+      place-items: center;
+      color: var(--muted);
+      border: 1px dashed #303a43;
+      border-radius: 6px;
+      background: rgba(0, 0, 0, .12);
+    }
+
+    .bag-chrome {
+      min-height: 0;
+      min-width: 0;
+      display: flex;
+      flex-direction: column;
+      gap: 10px;
+    }
+
+    .bag-tabs {
+      display: grid;
+      grid-template-columns: repeat(4, 1fr);
+      gap: 6px;
+    }
+
+    .bag-tab {
+      min-height: 30px;
+      padding: 5px 9px;
+      color: #b9c8d5;
+    }
+
+    .bag-tab.active {
+      border-color: #d3b65a;
+      color: #ffe49a;
+      background: #2f2b1f;
+      font-weight: 700;
+    }
+
+    .bag-board {
+      display: grid;
+      grid-template-columns: repeat(2, 294px);
+      max-inline-size: 100%;
+      gap: 12px;
+      align-content: start;
+      align-items: start;
+      justify-content: start;
+      overflow: auto;
+      padding: 0;
+    }
+
+    .bag-container {
+      min-width: 0;
+      width: 100%;
+    }
+
+    .bag-container-title,
+    .bag-footer {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      inline-size: 100%;
+      max-inline-size: 100%;
+      color: #c9def2;
+      font-size: 12px;
+    }
+
+    .bag-container-title {
+      margin-bottom: 7px;
+    }
+
+    .bag-grid {
+      display: grid;
+      grid-template-columns: repeat(5, 54px);
+      grid-auto-rows: 54px;
+      gap: 6px;
+    }
+
+    .inventory-slot {
+      position: relative;
+      width: 100%;
+      min-height: 0;
+      aspect-ratio: 1;
+      padding: 0;
+      overflow: hidden;
+      border: 1px solid #65717c;
+      border-radius: 7px;
+      background:
+        radial-gradient(circle at 35% 25%, rgba(255, 255, 255, .34), transparent 38%),
+        linear-gradient(145deg, #858b8d, #42484d 54%, #252b31);
+      box-shadow:
+        inset 0 1px 2px rgba(255, 255, 255, .35),
+        inset 0 -2px 4px rgba(0, 0, 0, .46),
+        0 2px 4px rgba(0, 0, 0, .36);
+    }
+
+    .inventory-slot:hover:not(:disabled) {
+      border-color: #f1d369;
+      background:
+        radial-gradient(circle at 35% 25%, rgba(255, 255, 255, .45), transparent 40%),
+        linear-gradient(145deg, #92999d, #4d555e 54%, #2a323b);
+    }
+
+    .inventory-slot.selected {
+      border-color: #ffe17a;
+      box-shadow:
+        inset 0 1px 2px rgba(255, 255, 255, .4),
+        0 0 0 2px rgba(255, 212, 83, .42),
+        0 4px 10px rgba(0, 0, 0, .42);
+    }
+
+    .inventory-slot.empty {
+      background:
+        linear-gradient(145deg, rgba(91, 101, 109, .5), rgba(35, 42, 49, .62));
+    }
+
+    .inventory-slot.filtered-out {
+      opacity: .18;
+    }
+
+    .inventory-slot img {
+      position: absolute;
+      inset: 0;
+      display: block;
+      width: 100%;
+      height: 100%;
+      object-fit: cover;
+    }
+
+    .slot-quantity {
+      position: absolute;
+      right: 3px;
+      bottom: 2px;
+      z-index: 2;
+      min-width: 16px;
+      color: #fff;
+      font-size: 16px;
+      font-weight: 800;
+      letter-spacing: 0;
+      line-height: 1;
+      pointer-events: none;
+      text-align: right;
+      text-shadow:
+        -1px -1px 0 #15202a,
+        1px -1px 0 #15202a,
+        -1px 1px 0 #15202a,
+        1px 1px 0 #15202a,
+        0 2px 2px rgba(0, 0, 0, .9);
+    }
+
+    .slot-id,
+    .slot-fallback,
+    .slot-empty-mark,
+    .slot-badge {
+      color: #d8e6f0;
+      text-shadow: 0 1px 2px #000;
+    }
+
+    .slot-id {
+      position: absolute;
+      left: 4px;
+      bottom: 4px;
+      display: none;
+      font-size: 10px;
+    }
+
+    .inventory-slot:hover .slot-id {
+      display: block;
+    }
+
+    .slot-badge {
+      position: absolute;
+      top: 3px;
+      right: 3px;
+      padding: 1px 3px;
+      border-radius: 3px;
+      background: rgba(45, 35, 17, .82);
+      color: #ffe49a;
+      font-size: 10px;
+      font-weight: 800;
+    }
+
+    .slot-fallback,
+    .slot-empty-mark {
+      display: grid;
+      height: 100%;
+      place-items: center;
+      font-weight: 700;
+    }
+
+    .inventory-slot.has-icon .slot-fallback {
+      display: none;
+    }
+
+    .slot-empty-mark {
+      opacity: .18;
+      font-size: 18px;
+    }
+
+    .bag-footer {
+      color: #ffe49a;
+      font-weight: 700;
+    }
+
+    .detail-grid {
+      display: grid;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      gap: 10px;
+    }
+
+    .detail-cell {
+      min-width: 0;
+      padding: 10px;
+      border: 1px solid #263847;
+      border-radius: 6px;
+      background: #111820;
+    }
+
+    .detail-cell span {
+      display: block;
+      color: var(--muted);
+      font-size: 12px;
+      margin-bottom: 5px;
+    }
+
+    .detail-cell strong {
+      display: block;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+      font-size: 15px;
+    }
+
+    .item-heading {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      margin-bottom: 12px;
+      padding: 10px;
+      border: 1px solid #263847;
+      border-radius: 6px;
+      background: #111820;
+    }
+
+    .item-preview-icon {
+      width: 42px;
+      height: 42px;
+      flex: 0 0 auto;
+      border: 1px solid #65717c;
+      border-radius: 7px;
+      background:
+        radial-gradient(circle at 35% 25%, rgba(255, 255, 255, .34), transparent 38%),
+        linear-gradient(145deg, #858b8d, #42484d 54%, #252b31);
+      object-fit: cover;
+    }
+
+    .item-heading-main {
+      min-width: 0;
+      flex: 1;
+    }
+
+    .item-heading strong {
+      display: block;
+      font-size: 18px;
+    }
+
+    .item-heading span {
+      display: block;
+      margin-top: 4px;
+      color: var(--muted);
+      font-size: 12px;
+    }
+
+    .tag {
+      display: inline-flex;
+      align-items: center;
+      min-height: 24px;
+      padding: 3px 7px;
+      border: 1px solid #5d4f23;
+      border-radius: 999px;
+      background: #2b2518;
+      color: #ffe49a;
+      font-size: 12px;
+      white-space: nowrap;
+    }
+
+    @media (max-width: 1120px) {
+      body { min-width: 760px; }
+      .gm-topbar,
+      .inventory-window-header {
+        align-items: flex-start;
+        flex-direction: column;
+      }
+      .inventory-editor-grid {
+        grid-template-columns: 1fr;
+      }
+      .inventory-panel {
+        inline-size: auto;
+      }
+      .bag-board {
+        grid-template-columns: repeat(2, 294px);
+      }
+      .stat-strip {
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+      }
+    }
+  </style>
+</head>
+<body>
+  <main class="gm-shell">
+    <header class="gm-topbar">
+      <div class="brand-block">
+        <div class="brand-mark">鱼</div>
+        <div>
+          <h1>鲜鱼库存管理</h1>
+        </div>
+      </div>
+      <div class="topbar-actions">
+        <span class="status-pill"><span id="connectionDot" class="dot"></span><span id="connectionText">未连接</span></span>
+        <div id="wsControls" class="ws-controls">
+          <input placeholder="请输入inventory所在的websocket地址" id="wsUrl" class="ws-input" autocomplete="off">
+          <button id="connectButton" class="primary" type="button">连接</button>
+        </div>
+      </div>
+    </header>
+
+    <section class="inventory-window" aria-label="库存管理">
+      <div class="inventory-window-header">
+        <div>
+          <h2>库存</h2>
+          <div class="panel-subtitle" id="snapshotText">尚未收到库存数据</div>
+        </div>
+        <div class="toolbar">
+          <input id="inventorySearch" class="inventory-search" placeholder="搜索物品 ID / 容器 / 标记">
+        </div>
+      </div>
+
+      <section class="stat-strip">
+        <div class="stat"><span>物品组</span><strong id="statItems">0</strong></div>
+        <div class="stat"><span>容器</span><strong id="statContainers">0</strong></div>
+      </section>
+
+      <div class="inventory-editor-grid">
+        <section class="panel inventory-panel">
+          <div class="panel-header">
+            <div>
+              <h2>仓库格</h2>
+              <div class="panel-subtitle" id="activeSummary">背包 1-2</div>
+            </div>
+          </div>
+          <div class="bag-chrome">
+            <div id="bagTabs" class="bag-tabs" role="tablist" aria-label="库存容器"></div>
+            <div id="bagBoard" class="bag-board"></div>
+            <div class="bag-footer"><span id="footerScope">背包 1-2</span><span id="footerCount">0/0</span></div>
+          </div>
+        </section>
+
+        <section class="panel">
+          <div class="panel-header">
+            <div>
+              <h2>物品详情</h2>
+              <div class="panel-subtitle" id="detailSubtitle">未选择物品</div>
+            </div>
+          </div>
+          <div id="detailPanel" class="bag-empty">暂无物品</div>
+        </section>
+      </div>
+    </section>
+  </main>
+
+  <script src="https://overlayplugin.github.io/OverlayPlugin/assets/shared/common.min.js"></script>
+  <script src="item-icons.js"></script>
+  <script>
+    const storageKey = "FishXIVItemReader.InventoryWebSocketUrl";
+    const params = new URLSearchParams(location.search);
+    const defaultWsUrl = "ws://127.0.0.1:17814/inventory";
+    const CMD_TYPE_PING = 1;
+    const CMD_TYPE_INVENTORY_SNAPSHOT = 2;
+    const state = {
+      socket: null,
+      reconnectTimer: 0,
+      manualClose: false,
+      wsUrl: params.get("ws") || localStorage.getItem(storageKey) || defaultWsUrl,
+      snapshot: null,
+      monitoredProcessId: 0,
+      lastViewSignature: "",
+      activeTab: 0,
+      selectedKey: "",
+      search: ""
+    };
+
+    const elements = {
+      wsUrl: document.getElementById("wsUrl"),
+      connectButton: document.getElementById("connectButton"),
+      wsControls: document.getElementById("wsControls"),
+      connectionDot: document.getElementById("connectionDot"),
+      connectionText: document.getElementById("connectionText"),
+      snapshotText: document.getElementById("snapshotText"),
+      inventorySearch: document.getElementById("inventorySearch"),
+      statItems: document.getElementById("statItems"),
+      statContainers: document.getElementById("statContainers"),
+      activeSummary: document.getElementById("activeSummary"),
+      bagTabs: document.getElementById("bagTabs"),
+      bagBoard: document.getElementById("bagBoard"),
+      footerScope: document.getElementById("footerScope"),
+      footerCount: document.getElementById("footerCount"),
+      detailSubtitle: document.getElementById("detailSubtitle"),
+      detailPanel: document.getElementById("detailPanel")
+    };
+
+    elements.wsUrl.value = state.wsUrl;
+    elements.connectButton.addEventListener("click", () => {
+      state.wsUrl = elements.wsUrl.value.trim() || defaultWsUrl;
+      localStorage.setItem(storageKey, state.wsUrl);
+      connectNativeWebSocket(true);
+    });
+    elements.inventorySearch.addEventListener("input", () => {
+      state.search = elements.inventorySearch.value.trim().toLowerCase();
+      render();
+    });
+
+    function isOverlayPluginEnvironment() {
+      return params.has("OVERLAY_WS") || typeof window.OverlayPluginApi !== "undefined";
+    }
+
+    function connectOverlayPluginEvents() {
+      elements.wsControls.classList.add("hidden");
+
+      if (typeof window.addOverlayListener !== "function" || typeof window.startOverlayEvents !== "function") {
+        setConnection("OverlayPlugin API 未就绪", false);
+        return;
+      }
+
+      setConnection("等待 OverlayPlugin", false);
+      window.addOverlayListener("FishXIVItemReader.Ping", message => handleProtocolMessage(message, true));
+      window.addOverlayListener("FishXIVItemReader.InventorySnapshot", message => handleProtocolMessage(message, true));
+      window.startOverlayEvents();
+      setConnection("OverlayPlugin 已连接", true);
+    }
+
+    function connectNativeWebSocket(manual) {
+      if (state.socket) {
+        state.manualClose = true;
+        try { state.socket.close(); } catch {}
+      }
+      if (state.reconnectTimer) {
+        clearTimeout(state.reconnectTimer);
+        state.reconnectTimer = 0;
+      }
+
+      state.manualClose = false;
+      setConnection("连接中", false);
+      const socket = new WebSocket(state.wsUrl);
+      state.socket = socket;
+
+      socket.addEventListener("open", () => setConnection("已连接", true));
+      socket.addEventListener("message", event => {
+        try {
+          handleProtocolMessage(JSON.parse(event.data), false);
+        } catch {
+          elements.snapshotText.textContent = "库存快照解析失败";
+        }
+      });
+      socket.addEventListener("close", () => {
+        if (state.socket === socket) state.socket = null;
+        setConnection("已断开", false);
+        if (!state.manualClose) {
+          state.reconnectTimer = window.setTimeout(() => connectNativeWebSocket(false), manual ? 1200 : 2000);
+        }
+      });
+      socket.addEventListener("error", () => setConnection("连接异常", false));
+    }
+
+    function handleProtocolMessage(message, overlayPluginMode) {
+      const processId = Number(message.processId || 0);
+      if (Number.isFinite(processId) && processId >= 0) {
+        state.monitoredProcessId = processId;
+      }
+
+      const connectedText = overlayPluginMode ? "OverlayPlugin 已连接" : "已连接";
+      if (message.cmdType === CMD_TYPE_PING) {
+        setConnection(connectionLabel(connectedText), true);
+        updateSnapshotText();
+        return;
+      }
+      if (message.cmdType !== CMD_TYPE_INVENTORY_SNAPSHOT) {
+        return;
+      }
+
+      setConnection(connectionLabel(connectedText), true);
+      state.snapshot = message;
+      selectDefaultItem();
+      render();
+    }
+
+    function setConnection(text, online) {
+      elements.connectionText.textContent = text;
+      elements.connectionDot.className = online ? "dot online" : "dot";
+    }
+
+    function connectionLabel(text) {
+      return state.monitoredProcessId > 0 ? `${text} PID ${state.monitoredProcessId}` : text;
+    }
+
+    function updateSnapshotText() {
+      const items = currentItems();
+      const containers = currentContainers();
+      const prefix = items.length > 0 || containers.length > 0 ? "已收到库存数据" : "尚未收到库存数据";
+      elements.snapshotText.textContent = state.monitoredProcessId > 0
+        ? `${prefix}，PID ${state.monitoredProcessId}`
+        : prefix;
+    }
+
+    function selectDefaultItem() {
+      const items = currentItems();
+      if (items.length === 0) {
+        state.selectedKey = "";
+        return;
+      }
+      if (!state.selectedKey || !items.some(item => itemKey(item) === state.selectedKey)) {
+        state.selectedKey = itemKey(items[0]);
+      }
+    }
+
+    function render() {
+      const snapshot = state.snapshot || emptySnapshot();
+      const items = currentItems();
+      const containers = currentContainers();
+      const activeContainers = activeContainerIds();
+      const capacity = activeContainers.reduce((sum, id) => sum + slotsForContainer(id), 0);
+      const activeCount = items.filter(item => activeContainers.includes(Number(item.containerId))).length;
+
+      updateSnapshotText();
+      elements.statItems.textContent = String(items.length);
+      elements.statContainers.textContent = String(containers.length);
+
+      elements.activeSummary.textContent = activeSummary();
+      elements.footerScope.textContent = activeSummary();
+      elements.footerCount.textContent = `${activeCount}/${capacity}`;
+      const viewSignature = buildViewSignature(snapshot, activeContainers);
+      if (state.lastViewSignature !== viewSignature) {
+        state.lastViewSignature = viewSignature;
+        renderTabs();
+        renderBoard(activeContainers);
+        renderDetail();
+      }
+    }
+
+    function renderTabs() {
+      const tabs = [
+        { key: 0, label: "1" },
+        { key: 1, label: "2" },
+        { key: 2, label: "特殊" },
+        { key: 3, label: "全部" }
+      ];
+      elements.bagTabs.innerHTML = tabs.map(tab =>
+        `<button type="button" class="${state.activeTab === tab.key ? "bag-tab active" : "bag-tab"}" data-tab="${tab.key}">${tab.label}</button>`
+      ).join("");
+      elements.bagTabs.querySelectorAll("button").forEach(button => {
+        button.addEventListener("click", () => {
+          state.activeTab = Number(button.dataset.tab);
+          render();
+        });
+      });
+    }
+
+    function renderBoard(containerIds) {
+      if (!state.snapshot) {
+        elements.bagBoard.innerHTML = `<div class="bag-empty">暂无库存快照</div>`;
+        return;
+      }
+
+      elements.bagBoard.innerHTML = containerIds.map(containerId => {
+        const slots = slotsForContainer(containerId);
+        const itemCount = currentItems().filter(item => Number(item.containerId) === containerId).length;
+        let html = `<section class="bag-container" aria-label="${escapeHtml(containerLabel(containerId))}">
+          <div class="bag-container-title"><span>${escapeHtml(containerLabel(containerId))}</span><span>${itemCount}/${slots}</span></div>
+          <div class="bag-grid">`;
+        for (let slotIndex = 0; slotIndex < slots; slotIndex++) {
+          const item = itemAt(containerId, slotIndex);
+          html += renderSlot(containerId, slotIndex, item);
+        }
+        html += `</div></section>`;
+        return html;
+      }).join("");
+
+      elements.bagBoard.querySelectorAll(".inventory-slot").forEach(button => {
+        button.addEventListener("click", () => {
+          state.selectedKey = button.dataset.key || "";
+          render();
+        });
+      });
+    }
+
+    function renderSlot(containerId, slotIndex, item) {
+      const key = item ? itemKey(item) : `${containerId}:${slotIndex}:empty`;
+      const filtered = !matchesSearch(item, containerId);
+      const classes = ["inventory-slot", item ? "filled" : "empty"];
+      if (state.selectedKey === key) classes.push("selected");
+      if (filtered) classes.push("filtered-out");
+      const title = item
+        ? `${itemLabel(item)} #${item.itemId} x${item.quantity}，${containerLabel(containerId)} / 槽位 ${slotIndex}`
+        : `${containerLabel(containerId)} / 槽位 ${slotIndex}`;
+      if (!item) {
+        return `<button type="button" class="${classes.join(" ")}" data-key="${key}" title="${escapeHtml(title)}"><span class="slot-empty-mark">·</span></button>`;
+      }
+
+      const quantity = Number(item.quantity || 0);
+      const badge = item.highQuality ? `<span class="slot-badge">HQ</span>` : "";
+      const quantityBadge = quantity > 1 ? `<span class="slot-quantity" aria-hidden="true">${quantity}</span>` : "";
+      const iconUrl = itemIconUrl(item.itemId);
+      if (iconUrl) classes.push("has-icon");
+      return `<button type="button" class="${classes.join(" ")}" data-key="${itemKey(item)}" title="${escapeHtml(title)}">
+        ${iconUrl ? `<img src="${escapeHtml(iconUrl)}" alt="" loading="lazy" onerror="this.remove(); this.parentElement.classList.remove('has-icon');">` : ""}
+        <span class="slot-fallback">${escapeHtml(String(item.itemId))}</span>
+        ${badge}
+        ${quantityBadge}
+        <span class="slot-id">#${escapeHtml(String(item.itemId))}</span>
+      </button>`;
+    }
+
+    function renderDetail() {
+      const item = selectedItem();
+      if (!item) {
+        elements.detailSubtitle.textContent = "未选择物品";
+        elements.detailPanel.className = "bag-empty";
+        elements.detailPanel.innerHTML = "暂无物品";
+        return;
+      }
+
+      elements.detailSubtitle.textContent = `${containerLabel(Number(item.containerId))} / 槽位 ${item.slotIndex}`;
+      elements.detailPanel.className = "";
+      const iconUrl = itemIconUrl(item.itemId);
+      const itemTag = item.highQuality
+        ? `<span class="tag">高品质</span>`
+        : item.collectable
+          ? `<span class="tag">收藏品</span>`
+          : "";
+      elements.detailPanel.innerHTML = `
+        <div class="item-heading">
+          ${iconUrl ? `<img class="item-preview-icon" src="${escapeHtml(iconUrl)}" alt="" loading="lazy" onerror="this.remove();">` : ""}
+          <div class="item-heading-main">
+            <strong>${escapeHtml(itemLabel(item))}</strong>
+            <span>#${escapeHtml(String(item.itemId))} · x${escapeHtml(String(item.quantity || 0))}</span>
+          </div>
+          ${itemTag}
+        </div>
+        <div class="detail-grid">
+          ${detailCell("容器", containerLabel(Number(item.containerId)))}
+          ${detailCell("槽位", item.slotIndex)}
+          ${detailCell("数量", item.quantity)}
+          ${detailCell("耐久", item.condition)}
+          ${detailCell("收藏/精炼", item.spiritbondOrCollectability)}
+          ${detailCell("投影物品", item.glamourItemId || "-")}
+          ${detailCell("标记", item.flagsText || "-")}
+          ${detailCell("内存地址", item.address || "-")}
+        </div>`;
+    }
+
+    function detailCell(label, value) {
+      return `<div class="detail-cell"><span>${escapeHtml(label)}</span><strong>${escapeHtml(String(value))}</strong></div>`;
+    }
+
+    function currentItems() {
+      return (state.snapshot && Array.isArray(state.snapshot.items)) ? state.snapshot.items : [];
+    }
+
+    function currentContainers() {
+      const snapshotContainers = state.snapshot && Array.isArray(state.snapshot.containers) ? state.snapshot.containers : [];
+      const ids = new Set(snapshotContainers.map(container => Number(container.id)));
+      currentItems().forEach(item => ids.add(Number(item.containerId)));
+      return Array.from(ids).filter(id => Number.isFinite(id)).sort((a, b) => a - b);
+    }
+
+    function activeContainerIds() {
+      const containers = currentContainers();
+      if (state.activeTab === 0) return [0, 1];
+      if (state.activeTab === 1) return [2, 3];
+      if (state.activeTab === 2) {
+        const special = containers.filter(container => container < 0 || container > 3);
+        return special.length ? special : [1000];
+      }
+      return containers.length ? containers : [0, 1];
+    }
+
+    function activeSummary() {
+      if (state.activeTab === 0) return "背包 1-2";
+      if (state.activeTab === 1) return "背包 3-4";
+      if (state.activeTab === 2) return "特殊容器";
+      return "全部容器";
+    }
+
+    function itemAt(containerId, slotIndex) {
+      return currentItems().find(item => Number(item.containerId) === containerId && Number(item.slotIndex) === slotIndex) || null;
+    }
+
+    function selectedItem() {
+      if (!state.selectedKey) return null;
+      return currentItems().find(item => itemKey(item) === state.selectedKey) || null;
+    }
+
+    function itemKey(item) {
+      return `${item.containerId}:${item.slotIndex}:${item.itemId}`;
+    }
+
+    function itemLabel(item) {
+      return item.itemName || `物品 ${item.itemId}`;
+    }
+
+    function buildViewSignature(snapshot, activeContainers) {
+      const containers = Array.isArray(snapshot.containers) ? snapshot.containers : [];
+      const items = Array.isArray(snapshot.items) ? snapshot.items : [];
+      return JSON.stringify({
+        activeTab: state.activeTab,
+        selectedKey: state.selectedKey,
+        search: state.search,
+        activeContainers,
+        containers: containers.map(container => [
+          Number(container.id),
+          container.label || "",
+          Number(container.slots || 0),
+          Number(container.itemCount || 0)
+        ]),
+        items: items.map(item => [
+          Number(item.containerId),
+          Number(item.slotIndex),
+          Number(item.itemId),
+          item.itemName || "",
+          Number(item.quantity || 0),
+          Number(item.condition || 0),
+          Number(item.spiritbondOrCollectability || 0),
+          Number(item.glamourItemId || 0),
+          Number(item.flags || 0),
+          item.flagsText || "",
+          !!item.highQuality,
+          !!item.collectable,
+          item.address || ""
+        ])
+      });
+    }
+
+    function itemIconUrl(itemId) {
+      const numericItemId = Number(itemId);
+      if (!Number.isFinite(numericItemId) || numericItemId <= 0) return "";
+      const iconMap = window.FishXIVItemIconMap || {};
+      const iconId = Number(iconMap[String(Math.trunc(numericItemId))]);
+      if (!Number.isFinite(iconId) || iconId <= 0) return "";
+      const paddedIconId = Math.trunc(iconId).toString().padStart(6, "0");
+      return `https://icon.nbbjack.com/${paddedIconId.slice(0, 3)}000/${paddedIconId}.png`;
+    }
+
+    function matchesSearch(item, containerId) {
+      if (!state.search) return true;
+      if (!item) return false;
+      const text = [
+        item.itemId,
+        item.itemName,
+        item.quantity,
+        item.flagsText,
+        containerLabel(containerId),
+        item.containerId,
+        item.slotIndex
+      ].join(" ").toLowerCase();
+      return text.includes(state.search);
+    }
+
+    function slotsForContainer(containerId) {
+      const fromSnapshot = state.snapshot && Array.isArray(state.snapshot.containers)
+        ? state.snapshot.containers.find(container => Number(container.id) === containerId)
+        : null;
+      if (fromSnapshot && Number(fromSnapshot.slots) > 0) return Number(fromSnapshot.slots);
+      if (containerId >= 0 && containerId <= 3) return 35;
+      const highest = currentItems()
+        .filter(item => Number(item.containerId) === containerId)
+        .reduce((max, item) => Math.max(max, Number(item.slotIndex)), -1);
+      return Math.min(70, Math.max(14, highest + 1));
+    }
+
+    function containerLabel(containerId) {
+      const fromSnapshot = state.snapshot && Array.isArray(state.snapshot.containers)
+        ? state.snapshot.containers.find(container => Number(container.id) === containerId)
+        : null;
+      if (fromSnapshot && fromSnapshot.label) return fromSnapshot.label;
+      const labels = {
+        0: "背包 1",
+        1: "背包 2",
+        2: "背包 3",
+        3: "背包 4",
+        1000: "当前装备",
+        2000: "货币",
+        2001: "水晶",
+        2004: "重要物品",
+        3200: "副手库",
+        3201: "头部库",
+        3202: "身体库",
+        3203: "手部库",
+        3204: "腰部库",
+        3205: "腿部库",
+        3206: "脚部库",
+        3207: "耳饰库",
+        3208: "项链库",
+        3209: "腕饰库",
+        3300: "戒指库",
+        3400: "灵魂水晶",
+        3500: "武器库",
+        4000: "陆行鸟鞍囊 1",
+        4001: "陆行鸟鞍囊 2",
+        4100: "额外鞍囊 1",
+        4101: "额外鞍囊 2",
+        10000: "雇员仓库 1",
+        10001: "雇员仓库 2",
+        10002: "雇员仓库 3",
+        10003: "雇员仓库 4",
+        10004: "雇员仓库 5",
+        10005: "雇员仓库 6",
+        10006: "雇员仓库 7"
+      };
+      return labels[containerId] || String(containerId);
+    }
+
+    function emptySnapshot() {
+      return {
+        cmdType: CMD_TYPE_INVENTORY_SNAPSHOT,
+        processId: 0,
+        items: [],
+        containers: []
+      };
+    }
+
+    function escapeHtml(value) {
+      return String(value)
+        .replace(/&/g, "&amp;")
+        .replace(/</g, "&lt;")
+        .replace(/>/g, "&gt;")
+        .replace(/"/g, "&quot;")
+        .replace(/'/g, "&#39;");
+    }
+
+    render();
+    if (isOverlayPluginEnvironment()) {
+      connectOverlayPluginEvents();
+    } else {
+      connectNativeWebSocket(false);
+    }
+  </script>
+</body>
+</html>

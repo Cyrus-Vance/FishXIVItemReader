@@ -1,0 +1,4 @@
+<Solution>
+  <Project Path="NukeBuild/NukeBuild.csproj" />
+  <Project Path="FishXIVItemReader/FishXIVItemReader.csproj" />
+</Solution>

@@ -1,0 +1,11 @@
+{
+  "schemaVersion": 1,
+  "plugin": "FishXIVItemReader",
+  "version": "0.0.0.1",
+  "downloadUrl": "https://github.com/Cyrus-Vance/FishXIVItemReader/releases/download/v0.0.0.1/FishXIVItemReader-v0.0.0.1.zip",
+  "fileName": "FishXIVItemReader-v0.0.0.1.zip",
+  "sha256": "",
+  "releasePageUrl": "https://github.com/Cyrus-Vance/FishXIVItemReader/releases/tag/v0.0.0.1",
+  "publishedAt": "2026-06-24T06:26:52.8095320+00:00",
+  "notes": "FishXIVItemReader 0.0.0.1"
+}

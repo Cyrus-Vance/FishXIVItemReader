@@ -1,0 +1,42 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <TargetFramework>net48</TargetFramework>
+    <OutputType>Library</OutputType>
+    <UseWindowsForms>true</UseWindowsForms>
+    <RootNamespace>FishXIVItemReader</RootNamespace>
+    <AssemblyName>FishXIVItemReader</AssemblyName>
+    <GenerateAssemblyInfo>false</GenerateAssemblyInfo>
+  </PropertyGroup>
+
+  <PropertyGroup>
+    <ActInstallDir Condition="'$(ActInstallDir)' == '' and '$(ACT_HOME)' != ''">$(ACT_HOME)</ActInstallDir>
+    <ActAssemblyPath Condition="'$(ActAssemblyPath)' == '' and Exists('$(ActInstallDir)\Advanced Combat Tracker.dll')">$(ActInstallDir)\Advanced Combat Tracker.dll</ActAssemblyPath>
+    <ActAssemblyPath Condition="'$(ActAssemblyPath)' == '' and Exists('$(ActInstallDir)\Advanced Combat Tracker.exe')">$(ActInstallDir)\Advanced Combat Tracker.exe</ActAssemblyPath>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <Compile Remove="NukeBuild\**" />
+    <EmbeddedResource Remove="NukeBuild\**" />
+    <None Remove="NukeBuild\**" />
+    <None Remove="GameClient\DeucalionOpcodes.json" />
+    <None Remove="Update\UpdateSource.json" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <EmbeddedResource Include="GameClient\DeucalionOpcodes.json" LogicalName="FishXIVItemReader.GameClient.DeucalionOpcodes.json" />
+    <EmbeddedResource Include="Update\UpdateSource.json" LogicalName="FishXIVItemReader.Update.UpdateSource.json" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <Reference Include="Advanced Combat Tracker" Condition="'$(ActAssemblyPath)' != ''">
+      <HintPath>$(ActAssemblyPath)</HintPath>
+      <Private>False</Private>
+      <SpecificVersion>False</SpecificVersion>
+    </Reference>
+  </ItemGroup>
+
+  <Target Name="ValidateActReference" BeforeTargets="ResolveReferences">
+    <Error Condition="'$(ActAssemblyPath)' == ''" Text="Set ACT_HOME, /p:ActInstallDir=..., or /p:ActAssemblyPath=... to an ACT directory or assembly path containing Advanced Combat Tracker.dll/exe." />
+    <Error Condition="'$(ActAssemblyPath)' != '' and !Exists('$(ActAssemblyPath)')" Text="ACT assembly was not found at $(ActAssemblyPath)." />
+  </Target>
+</Project>
