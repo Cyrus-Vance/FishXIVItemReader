@@ -155,7 +155,7 @@ namespace FishXIVItemReader
                 Location = new Point(18, 80),
                 Text = "读取陆行鸟鞍囊"
             };
-            includeSaddleBagCheckBox.CheckedChanged += delegate { RestartAutoRead(); };
+            includeSaddleBagCheckBox.CheckedChanged += delegate { OnExtraReadOptionChanged(); };
 
             includeRetainerStorageCheckBox = new CheckBox
             {
@@ -163,7 +163,7 @@ namespace FishXIVItemReader
                 Location = new Point(160, 80),
                 Text = "读取雇员仓库"
             };
-            includeRetainerStorageCheckBox.CheckedChanged += delegate { RestartAutoRead(); };
+            includeRetainerStorageCheckBox.CheckedChanged += delegate { OnExtraReadOptionChanged(); };
 
             includeArmoryChestCheckBox = new CheckBox
             {
@@ -171,7 +171,7 @@ namespace FishXIVItemReader
                 Location = new Point(282, 80),
                 Text = "读取兵装库"
             };
-            includeArmoryChestCheckBox.CheckedChanged += delegate { RestartAutoRead(); };
+            includeArmoryChestCheckBox.CheckedChanged += delegate { OnExtraReadOptionChanged(); };
 
             includeEquippedItemsCheckBox = new CheckBox
             {
@@ -179,7 +179,7 @@ namespace FishXIVItemReader
                 Location = new Point(390, 80),
                 Text = "读取当前装备"
             };
-            includeEquippedItemsCheckBox.CheckedChanged += delegate { RestartAutoRead(); };
+            includeEquippedItemsCheckBox.CheckedChanged += delegate { OnExtraReadOptionChanged(); };
 
             debugModeCheckBox = new CheckBox
             {
@@ -551,6 +551,16 @@ namespace FishXIVItemReader
         {
             statusStateValueLabel.Text = string.IsNullOrWhiteSpace(state) ? "-" : state;
             statusInventoryValueLabel.Text = string.IsNullOrWhiteSpace(inventory) ? "-" : inventory;
+        }
+
+        private void OnExtraReadOptionChanged()
+        {
+            if (pluginInitialized)
+            {
+                SaveSettings();
+            }
+
+            RestartAutoRead();
         }
 
         private void EnsureWebSocketAccessToken()
@@ -2195,6 +2205,38 @@ namespace FishXIVItemReader
                                 UpdateDebugGridVisibility();
                             }
                         }
+                        else if (reader.NodeType == XmlNodeType.Element && reader.LocalName == "IncludeSaddleBags")
+                        {
+                            bool includeSaddleBags;
+                            if (bool.TryParse(reader.ReadElementContentAsString(), out includeSaddleBags))
+                            {
+                                includeSaddleBagCheckBox.Checked = includeSaddleBags;
+                            }
+                        }
+                        else if (reader.NodeType == XmlNodeType.Element && reader.LocalName == "IncludeRetainerStorage")
+                        {
+                            bool includeRetainerStorage;
+                            if (bool.TryParse(reader.ReadElementContentAsString(), out includeRetainerStorage))
+                            {
+                                includeRetainerStorageCheckBox.Checked = includeRetainerStorage;
+                            }
+                        }
+                        else if (reader.NodeType == XmlNodeType.Element && reader.LocalName == "IncludeArmoryChest")
+                        {
+                            bool includeArmoryChest;
+                            if (bool.TryParse(reader.ReadElementContentAsString(), out includeArmoryChest))
+                            {
+                                includeArmoryChestCheckBox.Checked = includeArmoryChest;
+                            }
+                        }
+                        else if (reader.NodeType == XmlNodeType.Element && reader.LocalName == "IncludeEquippedItems")
+                        {
+                            bool includeEquippedItems;
+                            if (bool.TryParse(reader.ReadElementContentAsString(), out includeEquippedItems))
+                            {
+                                includeEquippedItemsCheckBox.Checked = includeEquippedItems;
+                            }
+                        }
                         else if (reader.NodeType == XmlNodeType.Element && reader.LocalName == "WebSocketPort")
                         {
                             int port;
@@ -2244,6 +2286,10 @@ namespace FishXIVItemReader
                 writer.WriteEndElement();
                 writer.WriteElementString("ReadMode", GetSelectedReadMode().ToString());
                 writer.WriteElementString("DebugMode", debugModeCheckBox.Checked ? "true" : "false");
+                writer.WriteElementString("IncludeSaddleBags", includeSaddleBagCheckBox.Checked ? "true" : "false");
+                writer.WriteElementString("IncludeRetainerStorage", includeRetainerStorageCheckBox.Checked ? "true" : "false");
+                writer.WriteElementString("IncludeArmoryChest", includeArmoryChestCheckBox.Checked ? "true" : "false");
+                writer.WriteElementString("IncludeEquippedItems", includeEquippedItemsCheckBox.Checked ? "true" : "false");
                 writer.WriteElementString("WebSocketPort", configuredWebSocketPort.ToString());
                 writer.WriteElementString("WebSocketAccessToken", webSocketAccessToken ?? string.Empty);
                 writer.WriteElementString("PendingUpdaterPath", pendingUpdaterExecutablePath ?? string.Empty);
