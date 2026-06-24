@@ -18,7 +18,7 @@ class Build : NukeBuild
 {
     const string PluginName = "FishXIVItemReader";
     const string UpdateManifestFileName = "FishXIVItemReader.update.json";
-    const string UpdateManifestBranch = "main";
+    const string UpdateManifestBranch = "refs/heads/main";
 
     public static int Main()
     {

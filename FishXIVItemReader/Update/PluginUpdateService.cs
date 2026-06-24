@@ -2,6 +2,7 @@ using System;
 using System.IO;
 using System.IO.Compression;
 using System.Net;
+using System.Net.Cache;
 using System.Reflection;
 using System.Runtime.Serialization;
 using System.Runtime.Serialization.Json;
@@ -15,7 +16,7 @@ namespace FishXIVItemReader.Update
     public sealed class PluginUpdateService
     {
         private const string UpdateSourceResourceName = "FishXIVItemReader.Update.UpdateSource.json";
-        private const string DefaultManifestUrl = "https://raw.githubusercontent.com/Cyrus-Vance/FishXIVItemReader/main/Update/FishXIVItemReader.update.json";
+        private const string DefaultManifestUrl = "https://raw.githubusercontent.com/Cyrus-Vance/FishXIVItemReader/refs/heads/main/Update/FishXIVItemReader.update.json";
         private const string PluginAssemblyFileName = "FishXIVItemReader.dll";
         private const int BufferSize = 81920;
 
@@ -110,6 +111,56 @@ namespace FishXIVItemReader.Update
                 token);
         }
 
+        public int InstallPreparedUpdate(
+            string stagingDirectory,
+            string pluginDirectory,
+            CancellationToken token)
+        {
+            if (string.IsNullOrWhiteSpace(stagingDirectory) || !Directory.Exists(stagingDirectory))
+            {
+                throw new DirectoryNotFoundException("更新暂存目录不存在。");
+            }
+
+            if (string.IsNullOrWhiteSpace(pluginDirectory))
+            {
+                throw new ArgumentException("插件目录异常。", "pluginDirectory");
+            }
+
+            var sourceRoot = NormalizeDirectoryPath(stagingDirectory);
+            var targetRoot = NormalizeDirectoryPath(pluginDirectory);
+            Directory.CreateDirectory(targetRoot);
+
+            var installedFileCount = 0;
+            foreach (var sourceFile in Directory.GetFiles(sourceRoot, "*", SearchOption.AllDirectories))
+            {
+                token.ThrowIfCancellationRequested();
+
+                var relativePath = GetRelativePath(sourceRoot, sourceFile);
+                if (ShouldSkipInstallFile(relativePath))
+                {
+                    continue;
+                }
+
+                var targetFile = Path.GetFullPath(Path.Combine(targetRoot, relativePath));
+                if (!IsPathInside(targetFile, targetRoot))
+                {
+                    throw new InvalidOperationException("更新包路径异常。");
+                }
+
+                var parent = Path.GetDirectoryName(targetFile);
+                if (!string.IsNullOrEmpty(parent))
+                {
+                    Directory.CreateDirectory(parent);
+                }
+
+                CopyFileWithRetry(sourceFile, targetFile);
+                installedFileCount++;
+            }
+
+            TryDeleteDirectory(stagingDirectory);
+            return installedFileCount;
+        }
+
         public static string FormatVersion(Version version)
         {
             var normalized = NormalizeVersion(version);
@@ -172,6 +223,9 @@ namespace FishXIVItemReader.Update
             ServicePointManager.SecurityProtocol |= SecurityProtocolType.Tls12;
             var request = (HttpWebRequest)WebRequest.Create(url);
             request.AutomaticDecompression = DecompressionMethods.GZip | DecompressionMethods.Deflate;
+            request.CachePolicy = new RequestCachePolicy(RequestCacheLevel.Reload);
+            request.Headers[HttpRequestHeader.CacheControl] = "no-cache";
+            request.Headers[HttpRequestHeader.Pragma] = "no-cache";
             request.UserAgent = "FishXIVItemReader/" + FormatVersion(Assembly.GetExecutingAssembly().GetName().Version ?? new Version(0, 0, 0, 0));
             request.Timeout = 15000;
             request.ReadWriteTimeout = 30000;
@@ -327,6 +381,31 @@ namespace FishXIVItemReader.Update
         private static bool ShouldSkipInstallFile(string relativePath)
         {
             return string.Equals(Path.GetExtension(relativePath), ".pdb", StringComparison.OrdinalIgnoreCase);
+        }
+
+        private static void CopyFileWithRetry(string sourceFile, string targetFile)
+        {
+            Exception lastException = null;
+            for (var i = 0; i < 10; i++)
+            {
+                try
+                {
+                    File.Copy(sourceFile, targetFile, true);
+                    return;
+                }
+                catch (IOException ex)
+                {
+                    lastException = ex;
+                }
+                catch (UnauthorizedAccessException ex)
+                {
+                    lastException = ex;
+                }
+
+                Thread.Sleep(300);
+            }
+
+            throw new IOException("无法覆盖插件文件。", lastException);
         }
 
         private static string GetRelativePath(string baseDirectory, string path)
