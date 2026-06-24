@@ -8,7 +8,7 @@ namespace FishXIVItemReader.Updater
 {
     internal static class Program
     {
-        private const int WaitTimeoutMilliseconds = 300000;
+        private const int WaitTimeoutMilliseconds = 1800000;
 
         private static int Main(string[] args)
         {
@@ -21,20 +21,24 @@ namespace FishXIVItemReader.Updater
                 var pluginDirectory = GetOption(options, "plugin-dir");
                 var stagingDirectory = GetOption(options, "staging-dir");
                 var actExecutablePath = GetOption(options, "act-exe");
+                var restartAct = ParseBool(GetOptionOrDefault(options, "restart-act", "true"));
 
                 ValidateDirectory(stagingDirectory, "更新暂存目录不存在。");
                 Directory.CreateDirectory(pluginDirectory);
 
                 WriteLog(logPath, "Waiting for ACT to exit.");
                 WaitForProcessExit(actProcessId, logPath);
-                Thread.Sleep(800);
 
                 CopyPreparedFiles(stagingDirectory, pluginDirectory, logPath);
                 TryDeleteFile(Path.Combine(pluginDirectory, "FishXIVItemReader.pdb"));
                 TryDeleteDirectory(stagingDirectory);
 
                 WriteLog(logPath, "Update files copied.");
-                RestartAct(actExecutablePath, logPath);
+                if (restartAct)
+                {
+                    RestartAct(actExecutablePath, logPath);
+                }
+
                 return 0;
             }
             catch (Exception ex)
@@ -72,6 +76,14 @@ namespace FishXIVItemReader.Updater
             return value;
         }
 
+        private static string GetOptionOrDefault(Dictionary<string, string> options, string name, string defaultValue)
+        {
+            string value;
+            return options.TryGetValue(name, out value) && !string.IsNullOrWhiteSpace(value)
+                ? value
+                : defaultValue;
+        }
+
         private static int ParseInt(string value)
         {
             int result;
@@ -81,6 +93,12 @@ namespace FishXIVItemReader.Updater
             }
 
             return result;
+        }
+
+        private static bool ParseBool(string value)
+        {
+            bool result;
+            return bool.TryParse(value, out result) && result;
         }
 
         private static void ValidateDirectory(string directory, string message)

@@ -896,6 +896,34 @@ namespace FishXIVItemReader
 
         private void PromptActRestart(PluginUpdatePreparedInstallResult preparedInstall)
         {
+            var restartMethod = FindActRestartMethod();
+            if (restartMethod != null)
+            {
+                try
+                {
+                    StartDeferredUpdateInstaller(preparedInstall.StagingDirectory, false);
+                    latestUpdateCheckResult = null;
+                    updateStatusValueLabel.Text = "等待 ACT 官方重启确认...";
+                    SetStatus("FishXIVItemReader 更新已准备，等待 ACT 官方重启确认。");
+
+                    if (!TryRequestActRestart(
+                            restartMethod,
+                            "FishXIVItemReader 更新已准备，需要重启 ACT 才能完成安装。"))
+                    {
+                        updateStatusValueLabel.Text = "更新已准备，请手动重启 ACT。";
+                        SetStatus("FishXIVItemReader 更新已准备，请手动重启 ACT 以完成安装。");
+                    }
+
+                    return;
+                }
+                catch (Exception)
+                {
+                    updateStatusValueLabel.Text = "启动安装器失败。";
+                    SetStatus("启动 FishXIVItemReader 更新安装器失败。");
+                    return;
+                }
+            }
+
             var response = MessageBox.Show(
                 this,
                 "FishXIVItemReader 更新已准备，需要重启 ACT 才能完成安装。" + Environment.NewLine + "是否现在重启 ACT？",
@@ -912,7 +940,7 @@ namespace FishXIVItemReader
 
             try
             {
-                StartDeferredUpdateInstaller(preparedInstall.StagingDirectory);
+                StartDeferredUpdateInstaller(preparedInstall.StagingDirectory, true);
                 latestUpdateCheckResult = null;
                 updateStatusValueLabel.Text = "正在重启 ACT 以完成安装...";
                 SetStatus("正在重启 ACT 以完成 FishXIVItemReader 更新。");
@@ -925,7 +953,7 @@ namespace FishXIVItemReader
             }
         }
 
-        private void StartDeferredUpdateInstaller(string stagingDirectory)
+        private void StartDeferredUpdateInstaller(string stagingDirectory, bool restartActAfterCopy)
         {
             if (string.IsNullOrWhiteSpace(stagingDirectory) || !Directory.Exists(stagingDirectory))
             {
@@ -940,6 +968,7 @@ namespace FishXIVItemReader
                 " --plugin-dir " + QuoteCommandLineArgument(pluginDirectory) +
                 " --staging-dir " + QuoteCommandLineArgument(stagingDirectory) +
                 " --act-exe " + QuoteCommandLineArgument(actExecutablePath) +
+                " --restart-act " + (restartActAfterCopy ? "true" : "false") +
                 " --log " + QuoteCommandLineArgument(logPath);
 
             var startInfo = new ProcessStartInfo(updaterPath, arguments)
@@ -990,6 +1019,11 @@ namespace FishXIVItemReader
 
         private static string GetCurrentProcessExecutablePath()
         {
+            if (!string.IsNullOrWhiteSpace(Application.ExecutablePath))
+            {
+                return Application.ExecutablePath;
+            }
+
             try
             {
                 var module = Process.GetCurrentProcess().MainModule;
@@ -998,6 +1032,70 @@ namespace FishXIVItemReader
             catch
             {
                 return string.Empty;
+            }
+        }
+
+        private static MethodInfo FindActRestartMethod()
+        {
+            var form = ActGlobals.oFormActMain;
+            if (form == null)
+            {
+                return null;
+            }
+
+            var methods = form.GetType().GetMethods(BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic);
+            foreach (var method in methods)
+            {
+                if (!string.Equals(method.Name, "RestartACT", StringComparison.Ordinal))
+                {
+                    continue;
+                }
+
+                var parameters = method.GetParameters();
+                if (parameters.Length == 2 &&
+                    parameters[0].ParameterType == typeof(bool) &&
+                    parameters[1].ParameterType == typeof(string))
+                {
+                    return method;
+                }
+            }
+
+            foreach (var method in methods)
+            {
+                if (!string.Equals(method.Name, "RestartACT", StringComparison.Ordinal))
+                {
+                    continue;
+                }
+
+                if (method.GetParameters().Length == 0)
+                {
+                    return method;
+                }
+            }
+
+            return null;
+        }
+
+        private static bool TryRequestActRestart(MethodInfo restartMethod, string additionalInfo)
+        {
+            var form = ActGlobals.oFormActMain;
+            if (form == null || restartMethod == null)
+            {
+                return false;
+            }
+
+            try
+            {
+                var parameters = restartMethod.GetParameters();
+                var arguments = parameters.Length == 2
+                    ? new object[] { true, additionalInfo }
+                    : new object[0];
+                restartMethod.Invoke(form, arguments);
+                return true;
+            }
+            catch
+            {
+                return false;
             }
         }
 
@@ -1093,13 +1191,23 @@ namespace FishXIVItemReader
                 return;
             }
 
+            Action closeAction = delegate
+            {
+                if (!form.IsDisposed)
+                {
+                    form.Close();
+                }
+
+                Application.Exit();
+            };
+
             if (form.InvokeRequired)
             {
-                form.BeginInvoke(new Action(form.Close));
+                form.BeginInvoke(closeAction);
             }
             else
             {
-                form.Close();
+                closeAction();
             }
         }
 
