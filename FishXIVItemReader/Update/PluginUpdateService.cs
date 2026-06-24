@@ -15,7 +15,7 @@ namespace FishXIVItemReader.Update
     public sealed class PluginUpdateService
     {
         private const string UpdateSourceResourceName = "FishXIVItemReader.Update.UpdateSource.json";
-        private const string DefaultManifestUrl = "https://raw.githubusercontent.com/Cyrus-Vance/FishXIVItemReader/main/FishXIVItemReader/Update/FishXIVItemReader.update.json";
+        private const string DefaultManifestUrl = "https://raw.githubusercontent.com/Cyrus-Vance/FishXIVItemReader/main/Update/FishXIVItemReader.update.json";
         private const string PluginAssemblyFileName = "FishXIVItemReader.dll";
         private const int BufferSize = 81920;
 

@@ -50,7 +50,7 @@ class Build : NukeBuild
 
     AbsolutePath ProjectFile => RootDirectory / "FishXIVItemReader" / "FishXIVItemReader.csproj";
     AbsolutePath AssemblyVersionFile => RootDirectory / "FishXIVItemReader" / "Properties" / "AssemblyVersion.cs";
-    AbsolutePath SourceUpdateManifestFile => RootDirectory / "FishXIVItemReader" / "Update" / UpdateManifestFileName;
+    AbsolutePath SourceUpdateManifestFile => RootDirectory / "Update" / UpdateManifestFileName;
     AbsolutePath PluginOutputDirectory => RootDirectory / "FishXIVItemReader" / "bin" / Configuration.ToString() / "net48";
     AbsolutePath ArtifactsDirectory => RootDirectory / "artifacts";
     AbsolutePath AllowedLocalPluginRoot => (AbsolutePath)@"D:\FFXIVACTPlugin";
@@ -339,7 +339,7 @@ class Build : NukeBuild
 
     static string GetRawUpdateManifestUrl(string repository)
     {
-        return $"https://raw.githubusercontent.com/{repository}/{UpdateManifestBranch}/FishXIVItemReader/Update/{UpdateManifestFileName}";
+        return $"https://raw.githubusercontent.com/{repository}/{UpdateManifestBranch}/Update/{UpdateManifestFileName}";
     }
 
     static string GetReleaseTag(string version)
