@@ -147,6 +147,10 @@
       width: 310px;
     }
 
+    .ws-token-input {
+      width: 250px;
+    }
+
     .status-pill {
       display: inline-flex;
       align-items: center;
@@ -586,6 +590,7 @@
         <span class="status-pill"><span id="connectionDot" class="dot"></span><span id="connectionText">未连接</span></span>
         <div id="wsControls" class="ws-controls">
           <input placeholder="请输入inventory所在的websocket地址" id="wsUrl" class="ws-input" autocomplete="off">
+          <input placeholder="访问Token" id="wsToken" class="ws-token-input" autocomplete="off">
           <button id="connectButton" class="primary" type="button">连接</button>
         </div>
       </div>
@@ -639,6 +644,7 @@
   <script src="item-icons.js"></script>
   <script>
     const storageKey = "FishXIVItemReader.InventoryWebSocketUrl";
+    const tokenStorageKey = "FishXIVItemReader.InventoryWebSocketToken";
     const params = new URLSearchParams(location.search);
     const defaultWsUrl = "ws://127.0.0.1:17814/inventory";
     const CMD_TYPE_PING = 1;
@@ -648,6 +654,7 @@
       reconnectTimer: 0,
       manualClose: false,
       wsUrl: params.get("ws") || localStorage.getItem(storageKey) || defaultWsUrl,
+      wsToken: params.get("token") || localStorage.getItem(tokenStorageKey) || "",
       snapshot: null,
       monitoredProcessId: 0,
       lastViewSignature: "",
@@ -658,6 +665,7 @@
 
     const elements = {
       wsUrl: document.getElementById("wsUrl"),
+      wsToken: document.getElementById("wsToken"),
       connectButton: document.getElementById("connectButton"),
       wsControls: document.getElementById("wsControls"),
       connectionDot: document.getElementById("connectionDot"),
@@ -676,9 +684,12 @@
     };
 
     elements.wsUrl.value = state.wsUrl;
+    elements.wsToken.value = state.wsToken;
     elements.connectButton.addEventListener("click", () => {
       state.wsUrl = elements.wsUrl.value.trim() || defaultWsUrl;
+      state.wsToken = elements.wsToken.value.trim();
       localStorage.setItem(storageKey, state.wsUrl);
+      localStorage.setItem(tokenStorageKey, state.wsToken);
       connectNativeWebSocket(true);
     });
     elements.inventorySearch.addEventListener("input", () => {
@@ -717,7 +728,7 @@
 
       state.manualClose = false;
       setConnection("连接中", false);
-      const socket = new WebSocket(state.wsUrl);
+      const socket = new WebSocket(buildNativeWebSocketUrl());
       state.socket = socket;
 
       socket.addEventListener("open", () => setConnection("已连接", true));
@@ -736,6 +747,20 @@
         }
       });
       socket.addEventListener("error", () => setConnection("连接异常", false));
+    }
+
+    function buildNativeWebSocketUrl() {
+      const token = state.wsToken.trim();
+      if (!token) return state.wsUrl;
+
+      try {
+        const url = new URL(state.wsUrl);
+        url.searchParams.set("token", token);
+        return url.toString();
+      } catch {
+        const separator = state.wsUrl.includes("?") ? "&" : "?";
+        return `${state.wsUrl}${separator}token=${encodeURIComponent(token)}`;
+      }
     }
 
     function handleProtocolMessage(message, overlayPluginMode) {

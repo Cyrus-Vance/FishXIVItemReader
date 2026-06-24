@@ -36,6 +36,7 @@ namespace FishXIVItemReader.Web
         private int heartbeatSendInProgress;
         private int monitoredProcessId;
         private int port;
+        private string accessToken = string.Empty;
         private volatile bool stopRequested;
 
         public InventoryWebSocketServer()
@@ -166,6 +167,14 @@ namespace FishXIVItemReader.Web
             lock (gate)
             {
                 monitoredProcessId = processId > 0 ? processId : 0;
+            }
+        }
+
+        public void SetAccessToken(string token)
+        {
+            lock (gate)
+            {
+                accessToken = token == null ? string.Empty : token.Trim();
             }
         }
 
@@ -317,7 +326,8 @@ namespace FishXIVItemReader.Web
 
                 var stream = tcpClient.GetStream();
                 string path;
-                var headers = ReadHandshakeHeaders(stream, out path);
+                string requestToken;
+                var headers = ReadHandshakeHeaders(stream, out path, out requestToken);
                 if (headers == null)
                 {
                     tcpClient.Close();
@@ -328,6 +338,13 @@ namespace FishXIVItemReader.Web
                     !string.Equals(path, "/", StringComparison.OrdinalIgnoreCase))
                 {
                     WriteHttpError(stream, "404 Not Found");
+                    tcpClient.Close();
+                    return;
+                }
+
+                if (!IsAccessTokenAccepted(requestToken))
+                {
+                    WriteHttpError(stream, "401 Unauthorized");
                     tcpClient.Close();
                     return;
                 }
@@ -431,9 +448,10 @@ namespace FishXIVItemReader.Web
             }
         }
 
-        private static Dictionary<string, string> ReadHandshakeHeaders(NetworkStream stream, out string path)
+        private static Dictionary<string, string> ReadHandshakeHeaders(NetworkStream stream, out string path, out string accessToken)
         {
             path = "/";
+            accessToken = string.Empty;
             var buffer = new List<byte>(1024);
             var lastBytes = new Queue<byte>(4);
 
@@ -482,6 +500,7 @@ namespace FishXIVItemReader.Web
             var target = requestParts[1];
             var queryIndex = target.IndexOf('?');
             path = queryIndex >= 0 ? target.Substring(0, queryIndex) : target;
+            accessToken = ExtractQueryValue(target, "token");
 
             var headers = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
             for (var i = 1; i < lines.Length; i++)
@@ -503,6 +522,74 @@ namespace FishXIVItemReader.Web
             }
 
             return headers;
+        }
+
+        private bool IsAccessTokenAccepted(string token)
+        {
+            string expectedToken;
+            lock (gate)
+            {
+                expectedToken = accessToken;
+            }
+
+            if (string.IsNullOrWhiteSpace(expectedToken) || string.IsNullOrWhiteSpace(token))
+            {
+                return false;
+            }
+
+            var expectedBytes = Encoding.UTF8.GetBytes(expectedToken.Trim());
+            var actualBytes = Encoding.UTF8.GetBytes(token.Trim());
+            var diff = expectedBytes.Length ^ actualBytes.Length;
+            var count = Math.Max(expectedBytes.Length, actualBytes.Length);
+            for (var i = 0; i < count; i++)
+            {
+                var expected = i < expectedBytes.Length ? expectedBytes[i] : (byte)0;
+                var actual = i < actualBytes.Length ? actualBytes[i] : (byte)0;
+                diff |= expected ^ actual;
+            }
+
+            return diff == 0;
+        }
+
+        private static string ExtractQueryValue(string target, string name)
+        {
+            var queryIndex = target.IndexOf('?');
+            if (queryIndex < 0 || queryIndex + 1 >= target.Length)
+            {
+                return string.Empty;
+            }
+
+            var query = target.Substring(queryIndex + 1);
+            var pairs = query.Split('&');
+            foreach (var pair in pairs)
+            {
+                if (string.IsNullOrEmpty(pair))
+                {
+                    continue;
+                }
+
+                var separator = pair.IndexOf('=');
+                var rawName = separator >= 0 ? pair.Substring(0, separator) : pair;
+                if (!string.Equals(UrlDecode(rawName), name, StringComparison.OrdinalIgnoreCase))
+                {
+                    continue;
+                }
+
+                var rawValue = separator >= 0 ? pair.Substring(separator + 1) : string.Empty;
+                return UrlDecode(rawValue);
+            }
+
+            return string.Empty;
+        }
+
+        private static string UrlDecode(string value)
+        {
+            if (string.IsNullOrEmpty(value))
+            {
+                return string.Empty;
+            }
+
+            return Uri.UnescapeDataString(value.Replace("+", " "));
         }
 
         private static bool IsWebSocketUpgrade(Dictionary<string, string> headers)

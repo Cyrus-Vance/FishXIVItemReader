@@ -46,6 +46,8 @@ namespace FishXIVItemReader
         private readonly Label statusInventoryValueLabel;
         private readonly Label statusWebSocketValueLabel;
         private readonly Label statusOverlayPluginValueLabel;
+        private readonly TextBox webSocketAccessTokenTextBox;
+        private readonly Button copyWebSocketAccessTokenButton;
         private readonly GroupBox updateGroupBox;
         private readonly Label updateCurrentValueLabel;
         private readonly Label updateLatestValueLabel;
@@ -89,6 +91,7 @@ namespace FishXIVItemReader
         private string lastAutoReadError;
         private string lastInventoryGridSignature;
         private int configuredWebSocketPort = InventoryWebSocketServer.DefaultPort;
+        private string webSocketAccessToken;
 
         public PluginMain()
         {
@@ -243,21 +246,22 @@ namespace FishXIVItemReader
             {
                 Anchor = AnchorStyles.Top | AnchorStyles.Left | AnchorStyles.Right,
                 Location = new Point(18, 106),
-                Size = new Size(648, 104),
+                Size = new Size(648, 132),
                 Text = "状态"
             };
             var statusTable = new TableLayoutPanel
             {
-                ColumnCount = 2,
+                ColumnCount = 3,
                 Dock = DockStyle.Fill,
                 Padding = new Padding(8, 8, 8, 6),
-                RowCount = 4
+                RowCount = 5
             };
             statusTable.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 74));
             statusTable.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100));
-            for (var row = 0; row < 4; row++)
+            statusTable.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 76));
+            for (var row = 0; row < 5; row++)
             {
-                statusTable.RowStyles.Add(new RowStyle(SizeType.Absolute, 17));
+                statusTable.RowStyles.Add(new RowStyle(SizeType.Absolute, 20));
             }
 
             Label stateValueLabel;
@@ -268,6 +272,30 @@ namespace FishXIVItemReader
             AddStatusRow(statusTable, 1, "库存", out inventoryValueLabel);
             AddStatusRow(statusTable, 2, "WS服务", out webSocketValueLabel);
             AddStatusRow(statusTable, 3, "Overlay", out overlayPluginValueLabel);
+            var tokenNameLabel = new Label
+            {
+                AutoSize = false,
+                Dock = DockStyle.Fill,
+                Text = "WS凭证",
+                TextAlign = ContentAlignment.MiddleLeft
+            };
+            webSocketAccessTokenTextBox = new TextBox
+            {
+                BorderStyle = BorderStyle.FixedSingle,
+                Dock = DockStyle.Fill,
+                Margin = new Padding(0, 0, 6, 0),
+                ReadOnly = true
+            };
+            copyWebSocketAccessTokenButton = new Button
+            {
+                Dock = DockStyle.Fill,
+                Margin = new Padding(0, 0, 0, 0),
+                Text = "复制"
+            };
+            copyWebSocketAccessTokenButton.Click += delegate { CopyWebSocketAccessToken(); };
+            statusTable.Controls.Add(tokenNameLabel, 0, 4);
+            statusTable.Controls.Add(webSocketAccessTokenTextBox, 1, 4);
+            statusTable.Controls.Add(copyWebSocketAccessTokenButton, 2, 4);
             statusStateValueLabel = stateValueLabel;
             statusInventoryValueLabel = inventoryValueLabel;
             statusWebSocketValueLabel = webSocketValueLabel;
@@ -443,6 +471,7 @@ namespace FishXIVItemReader
             Dock = DockStyle.Fill;
 
             LoadSettings();
+            EnsureWebSocketAccessToken();
             pluginDirectory = ResolvePluginDirectory();
             CleanupPendingUpdaterExecutable();
             pluginInitialized = true;
@@ -522,6 +551,44 @@ namespace FishXIVItemReader
         {
             statusStateValueLabel.Text = string.IsNullOrWhiteSpace(state) ? "-" : state;
             statusInventoryValueLabel.Text = string.IsNullOrWhiteSpace(inventory) ? "-" : inventory;
+        }
+
+        private void EnsureWebSocketAccessToken()
+        {
+            if (!WebSocketAccessToken.IsUsable(webSocketAccessToken))
+            {
+                webSocketAccessToken = WebSocketAccessToken.Generate();
+                SaveSettings();
+            }
+
+            inventoryWebSocketServer.SetAccessToken(webSocketAccessToken);
+            RefreshWebSocketAccessTokenUi();
+        }
+
+        private void RefreshWebSocketAccessTokenUi()
+        {
+            if (webSocketAccessTokenTextBox != null)
+            {
+                webSocketAccessTokenTextBox.Text = webSocketAccessToken ?? string.Empty;
+            }
+        }
+
+        private void CopyWebSocketAccessToken()
+        {
+            if (string.IsNullOrWhiteSpace(webSocketAccessToken))
+            {
+                return;
+            }
+
+            try
+            {
+                Clipboard.SetText(webSocketAccessToken);
+                SetStatus("WebSocket 访问凭证已复制。");
+            }
+            catch
+            {
+                SetStatus("复制 WebSocket 访问凭证失败。");
+            }
         }
 
         private void SetStatusState(string state, string detail)
@@ -1716,6 +1783,7 @@ namespace FishXIVItemReader
         {
             try
             {
+                inventoryWebSocketServer.SetAccessToken(webSocketAccessToken);
                 inventoryWebSocketServer.Start(configuredWebSocketPort);
                 inventoryWebSocketServer.SetMonitoredProcess(activeAutoReadProcessId);
                 overlayPluginEventBridge.TryConnect();
@@ -2135,6 +2203,10 @@ namespace FishXIVItemReader
                                 SetConfiguredWebSocketPort(port);
                             }
                         }
+                        else if (reader.NodeType == XmlNodeType.Element && reader.LocalName == "WebSocketAccessToken")
+                        {
+                            webSocketAccessToken = reader.ReadElementContentAsString();
+                        }
                         else if (reader.NodeType == XmlNodeType.Element && reader.LocalName == "PendingUpdaterPath")
                         {
                             pendingUpdaterExecutablePath = reader.ReadElementContentAsString();
@@ -2173,6 +2245,7 @@ namespace FishXIVItemReader
                 writer.WriteElementString("ReadMode", GetSelectedReadMode().ToString());
                 writer.WriteElementString("DebugMode", debugModeCheckBox.Checked ? "true" : "false");
                 writer.WriteElementString("WebSocketPort", configuredWebSocketPort.ToString());
+                writer.WriteElementString("WebSocketAccessToken", webSocketAccessToken ?? string.Empty);
                 writer.WriteElementString("PendingUpdaterPath", pendingUpdaterExecutablePath ?? string.Empty);
                 writer.WriteElementString("PendingUpdateStagingDirectory", pendingUpdateStagingDirectory ?? string.Empty);
                 writer.WriteEndElement();
