@@ -1,11 +1,11 @@
 {
   "schemaVersion": 1,
   "plugin": "FishXIVItemReader",
-  "version": "0.0.0.7",
-  "downloadUrl": "https://github.com/Cyrus-Vance/FishXIVItemReader/releases/download/v0.0.0.7/FishXIVItemReader-v0.0.0.7.zip",
-  "fileName": "FishXIVItemReader-v0.0.0.7.zip",
-  "sha256": "e5c40e0a22a8868d8cf28dcf05c643408ad718ebff8da962a25dce7d4a18513c",
-  "releasePageUrl": "https://github.com/Cyrus-Vance/FishXIVItemReader/releases/tag/v0.0.0.7",
-  "publishedAt": "2026-06-24T07:52:09.1640251+00:00",
-  "notes": "FishXIVItemReader 0.0.0.7"
+  "version": "0.0.0.8",
+  "downloadUrl": "https://github.com/Cyrus-Vance/FishXIVItemReader/releases/download/v0.0.0.8/FishXIVItemReader-v0.0.0.8.zip",
+  "fileName": "FishXIVItemReader-v0.0.0.8.zip",
+  "sha256": "656d707224b1a0af80f26f731e7734fd2b715d236c2a5f6f7fe8d335d5ff3172",
+  "releasePageUrl": "https://github.com/Cyrus-Vance/FishXIVItemReader/releases/tag/v0.0.0.8",
+  "publishedAt": "2026-06-24T08:07:45.2155107+00:00",
+  "notes": "FishXIVItemReader 0.0.0.8"
 }
