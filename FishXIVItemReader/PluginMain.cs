@@ -55,6 +55,8 @@ namespace FishXIVItemReader
         private readonly Button checkUpdateButton;
         private readonly Button downloadUpdateButton;
         private readonly GroupBox networkDetailGroupBox;
+        private readonly Label debugPlayerNameValueLabel;
+        private readonly Label debugPlayerContentIdValueLabel;
         private readonly Label networkConnectionValueLabel;
         private readonly Label networkProcessValueLabel;
         private readonly Label networkPacketsValueLabel;
@@ -367,8 +369,8 @@ namespace FishXIVItemReader
             {
                 Anchor = AnchorStyles.Top | AnchorStyles.Left | AnchorStyles.Right,
                 Location = new Point(18, 286),
-                Size = new Size(648, 176),
-                Text = "网络模式详情",
+                Size = new Size(648, 214),
+                Text = "调试详情",
                 Visible = false
             };
             var networkTable = new TableLayoutPanel
@@ -376,15 +378,17 @@ namespace FishXIVItemReader
                 ColumnCount = 2,
                 Dock = DockStyle.Fill,
                 Padding = new Padding(8, 8, 8, 6),
-                RowCount = 8
+                RowCount = 10
             };
             networkTable.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 74));
             networkTable.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100));
-            for (var row = 0; row < 8; row++)
+            for (var row = 0; row < 10; row++)
             {
                 networkTable.RowStyles.Add(new RowStyle(SizeType.Absolute, 17));
             }
 
+            Label playerNameLabel;
+            Label playerContentIdLabel;
             Label networkConnectionLabel;
             Label networkProcessLabel;
             Label networkPacketsLabel;
@@ -393,14 +397,18 @@ namespace FishXIVItemReader
             Label networkLastPacketLabel;
             Label networkTimesLabel;
             Label networkErrorLabel;
-            AddStatusRow(networkTable, 0, "连接", out networkConnectionLabel);
-            AddStatusRow(networkTable, 1, "PID", out networkProcessLabel);
-            AddStatusRow(networkTable, 2, "包统计", out networkPacketsLabel);
-            AddStatusRow(networkTable, 3, "背包", out networkInventoryLabel);
-            AddStatusRow(networkTable, 4, "缓存", out networkCacheLabel);
-            AddStatusRow(networkTable, 5, "最后包", out networkLastPacketLabel);
-            AddStatusRow(networkTable, 6, "最近时间", out networkTimesLabel);
-            AddStatusRow(networkTable, 7, "错误", out networkErrorLabel);
+            AddStatusRow(networkTable, 0, "角色名", out playerNameLabel);
+            AddStatusRow(networkTable, 1, "ContentId", out playerContentIdLabel);
+            AddStatusRow(networkTable, 2, "连接", out networkConnectionLabel);
+            AddStatusRow(networkTable, 3, "PID", out networkProcessLabel);
+            AddStatusRow(networkTable, 4, "包统计", out networkPacketsLabel);
+            AddStatusRow(networkTable, 5, "背包", out networkInventoryLabel);
+            AddStatusRow(networkTable, 6, "缓存", out networkCacheLabel);
+            AddStatusRow(networkTable, 7, "最后包", out networkLastPacketLabel);
+            AddStatusRow(networkTable, 8, "最近时间", out networkTimesLabel);
+            AddStatusRow(networkTable, 9, "错误", out networkErrorLabel);
+            debugPlayerNameValueLabel = playerNameLabel;
+            debugPlayerContentIdValueLabel = playerContentIdLabel;
             networkConnectionValueLabel = networkConnectionLabel;
             networkProcessValueLabel = networkProcessLabel;
             networkPacketsValueLabel = networkPacketsLabel;
@@ -731,10 +739,17 @@ namespace FishXIVItemReader
 
         private bool ShouldShowNetworkDetailPanel(InventoryReadMode mode)
         {
-            return debugModeCheckBox.Checked && mode == InventoryReadMode.Network;
+            return debugModeCheckBox.Checked;
         }
 
         private void ResetNetworkDetailPanel()
+        {
+            debugPlayerNameValueLabel.Text = "-";
+            debugPlayerContentIdValueLabel.Text = "-";
+            ResetNetworkRuntimeRows();
+        }
+
+        private void ResetNetworkRuntimeRows()
         {
             networkConnectionValueLabel.Text = "-";
             networkProcessValueLabel.Text = "-";
@@ -761,6 +776,12 @@ namespace FishXIVItemReader
             }
 
             SetNetworkDetailVisibility(true);
+            if (GetSelectedReadMode() != InventoryReadMode.Network)
+            {
+                ResetNetworkRuntimeRows();
+                return;
+            }
+
             networkConnectionValueLabel.Text = captureStatus.Connected ? "已连接 Deucalion" : "未连接 Deucalion";
             networkProcessValueLabel.Text = captureStatus.ProcessId > 0
                 ? captureStatus.ProcessId.ToString()
@@ -797,6 +818,29 @@ namespace FishXIVItemReader
             catch
             {
             }
+        }
+
+        private void UpdatePlayerIdentityDebugPanel(PlayerIdentityInfo identity)
+        {
+            if (!ShouldShowNetworkDetailPanel())
+            {
+                return;
+            }
+
+            SetNetworkDetailVisibility(true);
+            if (identity == null || !identity.IsLoaded)
+            {
+                debugPlayerNameValueLabel.Text = "-";
+                debugPlayerContentIdValueLabel.Text = "-";
+                return;
+            }
+
+            debugPlayerNameValueLabel.Text = string.IsNullOrWhiteSpace(identity.CharacterName)
+                ? "-"
+                : identity.CharacterName;
+            debugPlayerContentIdValueLabel.Text = identity.ContentId == 0
+                ? "-"
+                : identity.ContentId.ToString();
         }
 
         private static string FormatNetworkLastPacket(DeucalionCaptureStatus captureStatus)
@@ -1605,6 +1649,7 @@ namespace FishXIVItemReader
                         return;
                     }
 
+                    var playerIdentity = TryReadPlayerIdentityForDebug(request.ProcessId);
                     InventoryReadResult result;
                     lock (autoReadExecutionGate)
                     {
@@ -1629,7 +1674,7 @@ namespace FishXIVItemReader
                                 TimeSpan.Zero);
                     }
 
-                    PostAutoReadResult(version, result);
+                    PostAutoReadResult(version, result, playerIdentity);
                     if (WaitForNextAutoRead(request.Mode == InventoryReadMode.Memory ? 1000 : 1000, token))
                     {
                         return;
@@ -1638,8 +1683,9 @@ namespace FishXIVItemReader
                 catch (Exception ex)
                 {
                     var errorMessage = ex.Message;
+                    var playerIdentity = TryReadPlayerIdentityForDebug(request.ProcessId);
 
-                    PostAutoReadError(version, errorMessage, false);
+                    PostAutoReadError(version, errorMessage, false, playerIdentity);
                     if (WaitForNextAutoRead(request.Mode == InventoryReadMode.Memory ? 1000 : 3000, token))
                     {
                         return;
@@ -1653,7 +1699,19 @@ namespace FishXIVItemReader
             return token.WaitHandle.WaitOne(milliseconds);
         }
 
-        private void PostAutoReadResult(int version, InventoryReadResult result)
+        private static PlayerIdentityInfo TryReadPlayerIdentityForDebug(int processId)
+        {
+            try
+            {
+                return ClientInventoryReader.ReadPlayerIdentity(processId);
+            }
+            catch
+            {
+                return null;
+            }
+        }
+
+        private void PostAutoReadResult(int version, InventoryReadResult result, PlayerIdentityInfo playerIdentity)
         {
             BeginInvokeIfAvailable(delegate
             {
@@ -1664,10 +1722,16 @@ namespace FishXIVItemReader
 
                 lastAutoReadError = null;
                 ShowInventory(result);
+                UpdatePlayerIdentityDebugPanel(playerIdentity);
             });
         }
 
         private void PostAutoReadError(int version, string message, bool clearGrid)
+        {
+            PostAutoReadError(version, message, clearGrid, null);
+        }
+
+        private void PostAutoReadError(int version, string message, bool clearGrid, PlayerIdentityInfo playerIdentity)
         {
             BeginInvokeIfAvailable(delegate
             {
@@ -1694,6 +1758,7 @@ namespace FishXIVItemReader
                     TryUpdateNetworkDetailPanel();
                 }
 
+                UpdatePlayerIdentityDebugPanel(playerIdentity);
                 SetStatusState("读取失败", message);
             });
         }

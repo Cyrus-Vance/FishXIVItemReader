@@ -5,6 +5,7 @@ using System.Diagnostics;
 using System.IO;
 using System.Linq;
 using System.Runtime.InteropServices;
+using System.Text;
 
 namespace FishXIVItemReader.GameClient
 {
@@ -38,13 +39,27 @@ namespace FishXIVItemReader.GameClient
         private const int InventoryItemFlagsOffset = 0x1C;
         private const int InventoryItemGlamourIdOffset = 0x3C;
 
+        private const int PlayerStateReadLength = 0x70;
+        private const int PlayerStateIsLoadedOffset = 0x00;
+        private const int PlayerStateCharacterNameOffset = 0x01;
+        private const int PlayerStateCharacterNameLength = 64;
+        private const int PlayerStateContentIdOffset = 0x68;
+
         private static readonly byte?[] InventoryManagerInstanceSignature =
         {
             0x48, 0x8D, 0x0D, null, null, null, null, 0x81, 0xC2
         };
 
+        private static readonly byte?[] PlayerStateInstanceSignature =
+        {
+            0x48, 0x8D, 0x0D, null, null, null, null, 0xE8, null, null, null, null,
+            0x84, 0xC0, 0x75, 0x06, 0xF6, 0x43, 0x18, 0x02
+        };
+
         private static readonly object InventoryManagerCacheGate = new object();
         private static readonly Dictionary<int, ulong> InventoryManagerAddressCache = new Dictionary<int, ulong>();
+        private static readonly object PlayerStateCacheGate = new object();
+        private static readonly Dictionary<int, ulong> PlayerStateAddressCache = new Dictionary<int, ulong>();
 
         private static readonly ClientInventoryType[] PlayerInventoryTypes =
         {
@@ -232,6 +247,41 @@ namespace FishXIVItemReader.GameClient
                 includeEquippedItems: false);
         }
 
+        public static PlayerIdentityInfo ReadPlayerIdentity(int processId)
+        {
+            if (!Environment.Is64BitProcess)
+            {
+                throw new NotSupportedException("请使用64位ACT。");
+            }
+
+            using (var process = Process.GetProcessById(processId))
+            using (var memory = ProcessMemory.Open(processId))
+            {
+                var playerStateAddress = GetCachedOrLocatePlayerState(memory, process);
+                PlayerIdentityInfo identity;
+                if (!TryReadPlayerIdentity(memory, process, playerStateAddress, out identity))
+                {
+                    lock (PlayerStateCacheGate)
+                    {
+                        PlayerStateAddressCache.Remove(process.Id);
+                    }
+
+                    playerStateAddress = LocatePlayerState(memory, process);
+                    if (!TryReadPlayerIdentity(memory, process, playerStateAddress, out identity))
+                    {
+                        throw new InvalidOperationException("已定位玩家状态，但无法读取当前登录角色信息。");
+                    }
+
+                    lock (PlayerStateCacheGate)
+                    {
+                        PlayerStateAddressCache[process.Id] = playerStateAddress;
+                    }
+                }
+
+                return identity;
+            }
+        }
+
         private static ClientInventoryType[] CreateRequestedInventoryTypes(
             bool includeSaddleBags,
             bool includeRetainerStorage,
@@ -349,6 +399,69 @@ namespace FishXIVItemReader.GameClient
             throw new InvalidOperationException("无法定位背包管理器实例。");
         }
 
+        private static ulong GetCachedOrLocatePlayerState(ProcessMemory memory, Process process)
+        {
+            ulong cachedAddress;
+            lock (PlayerStateCacheGate)
+            {
+                if (PlayerStateAddressCache.TryGetValue(process.Id, out cachedAddress))
+                {
+                    PlayerIdentityInfo identity;
+                    if (TryReadPlayerIdentity(memory, process, cachedAddress, out identity))
+                    {
+                        return cachedAddress;
+                    }
+
+                    PlayerStateAddressCache.Remove(process.Id);
+                }
+            }
+
+            var locatedAddress = LocatePlayerState(memory, process);
+            lock (PlayerStateCacheGate)
+            {
+                PlayerStateAddressCache[process.Id] = locatedAddress;
+            }
+
+            return locatedAddress;
+        }
+
+        private static ulong LocatePlayerState(ProcessMemory memory, Process process)
+        {
+            var mainModule = process.MainModule;
+            if (mainModule == null)
+            {
+                throw new InvalidOperationException("无法检查FFXIV主模块。");
+            }
+
+            var moduleBase = unchecked((ulong)mainModule.BaseAddress.ToInt64());
+            var moduleSize = mainModule.ModuleMemorySize;
+            var moduleBytes = memory.ReadBytes(moduleBase, moduleSize);
+            ulong firstMatch = 0;
+
+            foreach (var matchOffset in FindPattern(moduleBytes, PlayerStateInstanceSignature))
+            {
+                var candidate = ResolveRipRelativeAddress(moduleBase, moduleBytes, matchOffset, 3, 7);
+
+                if (firstMatch == 0)
+                {
+                    firstMatch = candidate;
+                }
+
+                PlayerIdentityInfo identity;
+                if (TryReadPlayerIdentity(memory, process, candidate, out identity))
+                {
+                    return candidate;
+                }
+            }
+
+            if (firstMatch != 0)
+            {
+                return firstMatch;
+            }
+
+            throw new InvalidOperationException("无法定位玩家状态实例。");
+        }
+
         private static bool TryReadInventoriesPointer(ProcessMemory memory, ulong inventoryManagerAddress, out ulong inventoriesAddress)
         {
             inventoriesAddress = 0;
@@ -357,6 +470,45 @@ namespace FishXIVItemReader.GameClient
             {
                 inventoriesAddress = memory.ReadUInt64(inventoryManagerAddress + InventoryManagerInventoriesOffset);
                 return IsLikelyPointer(inventoriesAddress);
+            }
+            catch
+            {
+                return false;
+            }
+        }
+
+        private static bool TryReadPlayerIdentity(
+            ProcessMemory memory,
+            Process process,
+            ulong playerStateAddress,
+            out PlayerIdentityInfo identity)
+        {
+            identity = null;
+
+            try
+            {
+                byte[] bytes;
+                if (!memory.TryReadBytes(playerStateAddress, PlayerStateReadLength, out bytes))
+                {
+                    return false;
+                }
+
+                var isLoaded = bytes[PlayerStateIsLoadedOffset] != 0;
+                var characterName = ReadNullTerminatedUtf8(
+                    bytes,
+                    PlayerStateCharacterNameOffset,
+                    PlayerStateCharacterNameLength);
+                var contentId = BitConverter.ToUInt64(bytes, PlayerStateContentIdOffset);
+
+                identity = new PlayerIdentityInfo(
+                    process.Id,
+                    process.ProcessName,
+                    playerStateAddress,
+                    isLoaded,
+                    characterName,
+                    contentId);
+
+                return true;
             }
             catch
             {
@@ -482,6 +634,31 @@ namespace FishXIVItemReader.GameClient
                     GlamourId = BitConverter.ToUInt32(bytes, offset + InventoryItemGlamourIdOffset)
                 };
             }
+        }
+
+        private static ulong ResolveRipRelativeAddress(
+            ulong moduleBase,
+            byte[] moduleBytes,
+            int instructionOffset,
+            int displacementOffset,
+            int instructionLength)
+        {
+            var instructionAddress = moduleBase + (ulong)instructionOffset;
+            var displacement = BitConverter.ToInt32(moduleBytes, instructionOffset + displacementOffset);
+            return unchecked((ulong)((long)instructionAddress + instructionLength + displacement));
+        }
+
+        private static string ReadNullTerminatedUtf8(byte[] bytes, int offset, int maxLength)
+        {
+            var length = 0;
+            while (length < maxLength && offset + length < bytes.Length && bytes[offset + length] != 0)
+            {
+                length++;
+            }
+
+            return length <= 0
+                ? string.Empty
+                : Encoding.UTF8.GetString(bytes, offset, length).Trim();
         }
 
         private static IEnumerable<int> FindPattern(byte[] bytes, byte?[] pattern)
