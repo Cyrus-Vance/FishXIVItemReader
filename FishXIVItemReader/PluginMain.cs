@@ -66,6 +66,7 @@ namespace FishXIVItemReader
         private readonly Label networkTimesValueLabel;
         private readonly Label networkErrorValueLabel;
         private readonly DataGridView inventoryGrid;
+        private readonly TableLayoutPanel rootLayoutPanel;
         private readonly DeucalionInventoryReader networkInventoryReader;
         private readonly InventoryWebSocketServer inventoryWebSocketServer;
         private readonly OverlayPluginEventBridge overlayPluginEventBridge;
@@ -108,20 +109,20 @@ namespace FishXIVItemReader
                 "Updates");
             pluginDirectory = ResolvePluginDirectory();
             pluginUpdateService = new PluginUpdateService();
+            SuspendLayout();
 
             processLabel = new Label
             {
                 AutoSize = true,
-                Location = new Point(18, 20),
+                Anchor = AnchorStyles.Left,
                 Text = "游戏进程"
             };
 
             processComboBox = new ComboBox
             {
-                Anchor = AnchorStyles.Top | AnchorStyles.Left,
+                Dock = DockStyle.Fill,
                 DropDownStyle = ComboBoxStyle.DropDownList,
-                Location = new Point(108, 16),
-                Size = new Size(300, 24)
+                MinimumSize = new Size(220, 0)
             };
             processComboBox.SelectedIndexChanged += delegate
             {
@@ -132,15 +133,15 @@ namespace FishXIVItemReader
             readModeLabel = new Label
             {
                 AutoSize = true,
-                Location = new Point(18, 52),
+                Anchor = AnchorStyles.Left,
                 Text = "读取模式"
             };
 
             readModeComboBox = new ComboBox
             {
+                Anchor = AnchorStyles.Left,
                 DropDownStyle = ComboBoxStyle.DropDownList,
-                Location = new Point(108, 48),
-                Size = new Size(180, 24)
+                MinimumSize = new Size(180, 0)
             };
             readModeComboBox.Items.Add(new ReadModeOption(InventoryReadMode.Memory, "内存模式"));
             readModeComboBox.Items.Add(new ReadModeOption(InventoryReadMode.Network, "网络模式"));
@@ -154,7 +155,7 @@ namespace FishXIVItemReader
             includeSaddleBagCheckBox = new CheckBox
             {
                 AutoSize = true,
-                Location = new Point(18, 80),
+                Anchor = AnchorStyles.Left,
                 Text = "读取陆行鸟鞍囊"
             };
             includeSaddleBagCheckBox.CheckedChanged += delegate { OnExtraReadOptionChanged(); };
@@ -162,7 +163,7 @@ namespace FishXIVItemReader
             includeRetainerStorageCheckBox = new CheckBox
             {
                 AutoSize = true,
-                Location = new Point(160, 80),
+                Anchor = AnchorStyles.Left,
                 Text = "读取雇员仓库"
             };
             includeRetainerStorageCheckBox.CheckedChanged += delegate { OnExtraReadOptionChanged(); };
@@ -170,7 +171,7 @@ namespace FishXIVItemReader
             includeArmoryChestCheckBox = new CheckBox
             {
                 AutoSize = true,
-                Location = new Point(282, 80),
+                Anchor = AnchorStyles.Left,
                 Text = "读取兵装库"
             };
             includeArmoryChestCheckBox.CheckedChanged += delegate { OnExtraReadOptionChanged(); };
@@ -178,7 +179,7 @@ namespace FishXIVItemReader
             includeEquippedItemsCheckBox = new CheckBox
             {
                 AutoSize = true,
-                Location = new Point(390, 80),
+                Anchor = AnchorStyles.Left,
                 Text = "读取当前装备"
             };
             includeEquippedItemsCheckBox.CheckedChanged += delegate { OnExtraReadOptionChanged(); };
@@ -186,35 +187,38 @@ namespace FishXIVItemReader
             debugModeCheckBox = new CheckBox
             {
                 AutoSize = true,
-                Location = new Point(520, 80),
+                Anchor = AnchorStyles.Left,
                 Text = "调试模式"
             };
             debugModeCheckBox.CheckedChanged += delegate { UpdateDebugGridVisibility(); };
 
             refreshProcessesButton = new Button
             {
-                Anchor = AnchorStyles.Top | AnchorStyles.Right,
-                Location = new Point(420, 14),
-                Size = new Size(92, 28),
+                AutoSize = true,
+                AutoSizeMode = AutoSizeMode.GrowAndShrink,
+                Dock = DockStyle.Fill,
+                MinimumSize = new Size(92, 0),
                 Text = "刷新"
             };
             refreshProcessesButton.Click += delegate { RefreshProcessList(); };
 
             switchWindowButton = new Button
             {
-                Anchor = AnchorStyles.Top | AnchorStyles.Right,
+                AutoSize = true,
+                AutoSizeMode = AutoSizeMode.GrowAndShrink,
+                Dock = DockStyle.Fill,
                 Enabled = false,
-                Location = new Point(520, 14),
-                Size = new Size(96, 28),
+                MinimumSize = new Size(96, 0),
                 Text = "切换窗口"
             };
             switchWindowButton.Click += delegate { SwitchToSelectedGameWindow(); };
 
             readInventoryButton = new Button
             {
-                Anchor = AnchorStyles.Top | AnchorStyles.Right,
-                Location = new Point(624, 14),
-                Size = new Size(120, 28),
+                AutoSize = true,
+                AutoSizeMode = AutoSizeMode.GrowAndShrink,
+                Dock = DockStyle.Fill,
+                MinimumSize = new Size(120, 0),
                 Text = "重启读取"
             };
             readInventoryButton.Click += delegate { RestartAutoRead(); };
@@ -222,48 +226,51 @@ namespace FishXIVItemReader
             webSocketPortLabel = new Label
             {
                 AutoSize = true,
-                Location = new Point(300, 52),
+                Anchor = AnchorStyles.Left,
                 Text = "WS端口"
             };
 
             webSocketPortNumericUpDown = new NumericUpDown
             {
-                Location = new Point(356, 48),
+                Anchor = AnchorStyles.Left,
                 Maximum = 65535,
                 Minimum = 1,
-                Size = new Size(76, 24),
+                MinimumSize = new Size(76, 0),
                 Value = InventoryWebSocketServer.DefaultPort
             };
 
             applyWebSocketPortButton = new Button
             {
-                Anchor = AnchorStyles.Top | AnchorStyles.Right,
-                Location = new Point(440, 46),
-                Size = new Size(76, 28),
+                AutoSize = true,
+                AutoSizeMode = AutoSizeMode.GrowAndShrink,
+                Dock = DockStyle.Fill,
+                MinimumSize = new Size(76, 0),
                 Text = "应用"
             };
             applyWebSocketPortButton.Click += delegate { ApplyWebSocketPortSetting(); };
 
             statusGroupBox = new GroupBox
             {
-                Anchor = AnchorStyles.Top | AnchorStyles.Left | AnchorStyles.Right,
-                Location = new Point(18, 106),
-                Size = new Size(648, 132),
+                AutoSize = true,
+                AutoSizeMode = AutoSizeMode.GrowAndShrink,
+                Dock = DockStyle.Fill,
                 Text = "状态"
             };
             var statusTable = new TableLayoutPanel
             {
+                AutoSize = true,
+                AutoSizeMode = AutoSizeMode.GrowAndShrink,
                 ColumnCount = 3,
                 Dock = DockStyle.Fill,
                 Padding = new Padding(8, 8, 8, 6),
                 RowCount = 5
             };
-            statusTable.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 74));
+            statusTable.ColumnStyles.Add(new ColumnStyle(SizeType.AutoSize));
             statusTable.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100));
-            statusTable.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 76));
+            statusTable.ColumnStyles.Add(new ColumnStyle(SizeType.AutoSize));
             for (var row = 0; row < 5; row++)
             {
-                statusTable.RowStyles.Add(new RowStyle(SizeType.Absolute, 20));
+                statusTable.RowStyles.Add(new RowStyle(SizeType.AutoSize));
             }
 
             Label stateValueLabel;
@@ -276,8 +283,8 @@ namespace FishXIVItemReader
             AddStatusRow(statusTable, 3, "Overlay", out overlayPluginValueLabel);
             var tokenNameLabel = new Label
             {
-                AutoSize = false,
-                Dock = DockStyle.Fill,
+                AutoSize = true,
+                Anchor = AnchorStyles.Left,
                 Text = "WS凭证",
                 TextAlign = ContentAlignment.MiddleLeft
             };
@@ -290,8 +297,11 @@ namespace FishXIVItemReader
             };
             copyWebSocketAccessTokenButton = new Button
             {
+                AutoSize = true,
+                AutoSizeMode = AutoSizeMode.GrowAndShrink,
                 Dock = DockStyle.Fill,
                 Margin = new Padding(0, 0, 0, 0),
+                MinimumSize = new Size(76, 0),
                 Text = "复制"
             };
             copyWebSocketAccessTokenButton.Click += delegate { CopyWebSocketAccessToken(); };
@@ -309,25 +319,27 @@ namespace FishXIVItemReader
 
             updateGroupBox = new GroupBox
             {
-                Anchor = AnchorStyles.Top | AnchorStyles.Left | AnchorStyles.Right,
-                Location = new Point(18, 178),
-                Size = new Size(648, 100),
+                AutoSize = true,
+                AutoSizeMode = AutoSizeMode.GrowAndShrink,
+                Dock = DockStyle.Fill,
                 Text = "更新"
             };
             var updateTable = new TableLayoutPanel
             {
+                AutoSize = true,
+                AutoSizeMode = AutoSizeMode.GrowAndShrink,
                 ColumnCount = 4,
                 Dock = DockStyle.Fill,
                 Padding = new Padding(8, 8, 8, 6),
                 RowCount = 3
             };
-            updateTable.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 74));
+            updateTable.ColumnStyles.Add(new ColumnStyle(SizeType.AutoSize));
             updateTable.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100));
-            updateTable.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 98));
-            updateTable.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 120));
+            updateTable.ColumnStyles.Add(new ColumnStyle(SizeType.AutoSize));
+            updateTable.ColumnStyles.Add(new ColumnStyle(SizeType.AutoSize));
             for (var row = 0; row < 3; row++)
             {
-                updateTable.RowStyles.Add(new RowStyle(SizeType.Absolute, 22));
+                updateTable.RowStyles.Add(new RowStyle(SizeType.AutoSize));
             }
 
             Label currentVersionLabel;
@@ -345,17 +357,23 @@ namespace FishXIVItemReader
 
             checkUpdateButton = new Button
             {
+                AutoSize = true,
+                AutoSizeMode = AutoSizeMode.GrowAndShrink,
                 Dock = DockStyle.Fill,
                 Margin = new Padding(6, 0, 0, 2),
+                MinimumSize = new Size(98, 0),
                 Text = "检查更新"
             };
             checkUpdateButton.Click += async delegate { await CheckPluginUpdateAsync(); };
 
             downloadUpdateButton = new Button
             {
+                AutoSize = true,
+                AutoSizeMode = AutoSizeMode.GrowAndShrink,
                 Dock = DockStyle.Fill,
                 Enabled = false,
                 Margin = new Padding(6, 0, 0, 2),
+                MinimumSize = new Size(120, 0),
                 Text = "下载并安装"
             };
             downloadUpdateButton.Click += async delegate { await DownloadPluginUpdateAsync(); };
@@ -367,24 +385,26 @@ namespace FishXIVItemReader
 
             networkDetailGroupBox = new GroupBox
             {
-                Anchor = AnchorStyles.Top | AnchorStyles.Left | AnchorStyles.Right,
-                Location = new Point(18, 286),
-                Size = new Size(648, 214),
+                AutoSize = true,
+                AutoSizeMode = AutoSizeMode.GrowAndShrink,
+                Dock = DockStyle.Fill,
                 Text = "调试详情",
                 Visible = false
             };
             var networkTable = new TableLayoutPanel
             {
+                AutoSize = true,
+                AutoSizeMode = AutoSizeMode.GrowAndShrink,
                 ColumnCount = 2,
                 Dock = DockStyle.Fill,
                 Padding = new Padding(8, 8, 8, 6),
                 RowCount = 10
             };
-            networkTable.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 74));
+            networkTable.ColumnStyles.Add(new ColumnStyle(SizeType.AutoSize));
             networkTable.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100));
             for (var row = 0; row < 10; row++)
             {
-                networkTable.RowStyles.Add(new RowStyle(SizeType.Absolute, 17));
+                networkTable.RowStyles.Add(new RowStyle(SizeType.AutoSize));
             }
 
             Label playerNameLabel;
@@ -424,49 +444,132 @@ namespace FishXIVItemReader
             {
                 AllowUserToAddRows = false,
                 AllowUserToDeleteRows = false,
-                Anchor = AnchorStyles.Top | AnchorStyles.Bottom | AnchorStyles.Left | AnchorStyles.Right,
                 AutoSizeColumnsMode = DataGridViewAutoSizeColumnsMode.Fill,
                 ColumnHeadersHeightSizeMode = DataGridViewColumnHeadersHeightSizeMode.AutoSize,
-                Location = new Point(18, 244),
+                Dock = DockStyle.Fill,
+                MinimumSize = new Size(320, 180),
                 ReadOnly = true,
                 RowHeadersVisible = false,
                 SelectionMode = DataGridViewSelectionMode.FullRowSelect,
-                Size = new Size(648, 260),
                 Visible = false
             };
             ConfigureGrid();
 
-            AutoScaleMode = AutoScaleMode.Font;
-            Controls.Add(processLabel);
-            Controls.Add(processComboBox);
-            Controls.Add(readModeLabel);
-            Controls.Add(readModeComboBox);
-            Controls.Add(includeSaddleBagCheckBox);
-            Controls.Add(includeRetainerStorageCheckBox);
-            Controls.Add(includeArmoryChestCheckBox);
-            Controls.Add(includeEquippedItemsCheckBox);
-            Controls.Add(debugModeCheckBox);
-            Controls.Add(refreshProcessesButton);
-            Controls.Add(switchWindowButton);
-            Controls.Add(readInventoryButton);
-            Controls.Add(webSocketPortLabel);
-            Controls.Add(webSocketPortNumericUpDown);
-            Controls.Add(applyWebSocketPortButton);
-            Controls.Add(statusGroupBox);
-            Controls.Add(updateGroupBox);
-            Controls.Add(networkDetailGroupBox);
-            Controls.Add(inventoryGrid);
+            var processRow = new TableLayoutPanel
+            {
+                AutoSize = true,
+                AutoSizeMode = AutoSizeMode.GrowAndShrink,
+                ColumnCount = 5,
+                Dock = DockStyle.Fill,
+                Margin = new Padding(0),
+                RowCount = 1
+            };
+            processRow.ColumnStyles.Add(new ColumnStyle(SizeType.AutoSize));
+            processRow.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100));
+            processRow.ColumnStyles.Add(new ColumnStyle(SizeType.AutoSize));
+            processRow.ColumnStyles.Add(new ColumnStyle(SizeType.AutoSize));
+            processRow.ColumnStyles.Add(new ColumnStyle(SizeType.AutoSize));
+            processRow.Controls.Add(processLabel, 0, 0);
+            processRow.Controls.Add(processComboBox, 1, 0);
+            processRow.Controls.Add(refreshProcessesButton, 2, 0);
+            processRow.Controls.Add(switchWindowButton, 3, 0);
+            processRow.Controls.Add(readInventoryButton, 4, 0);
+
+            var modeRow = new TableLayoutPanel
+            {
+                AutoSize = true,
+                AutoSizeMode = AutoSizeMode.GrowAndShrink,
+                ColumnCount = 6,
+                Dock = DockStyle.Fill,
+                Margin = new Padding(0),
+                RowCount = 1
+            };
+            modeRow.ColumnStyles.Add(new ColumnStyle(SizeType.AutoSize));
+            modeRow.ColumnStyles.Add(new ColumnStyle(SizeType.AutoSize));
+            modeRow.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100));
+            modeRow.ColumnStyles.Add(new ColumnStyle(SizeType.AutoSize));
+            modeRow.ColumnStyles.Add(new ColumnStyle(SizeType.AutoSize));
+            modeRow.ColumnStyles.Add(new ColumnStyle(SizeType.AutoSize));
+            modeRow.Controls.Add(readModeLabel, 0, 0);
+            modeRow.Controls.Add(readModeComboBox, 1, 0);
+            modeRow.Controls.Add(webSocketPortLabel, 3, 0);
+            modeRow.Controls.Add(webSocketPortNumericUpDown, 4, 0);
+            modeRow.Controls.Add(applyWebSocketPortButton, 5, 0);
+
+            var optionRow = new FlowLayoutPanel
+            {
+                AutoSize = true,
+                AutoSizeMode = AutoSizeMode.GrowAndShrink,
+                Dock = DockStyle.Fill,
+                FlowDirection = FlowDirection.LeftToRight,
+                Margin = new Padding(0),
+                WrapContents = true
+            };
+            optionRow.Controls.Add(includeSaddleBagCheckBox);
+            optionRow.Controls.Add(includeRetainerStorageCheckBox);
+            optionRow.Controls.Add(includeArmoryChestCheckBox);
+            optionRow.Controls.Add(includeEquippedItemsCheckBox);
+            optionRow.Controls.Add(debugModeCheckBox);
+
+            var configurationLayout = new TableLayoutPanel
+            {
+                AutoSize = true,
+                AutoSizeMode = AutoSizeMode.GrowAndShrink,
+                ColumnCount = 1,
+                Dock = DockStyle.Fill,
+                Margin = new Padding(0, 0, 0, 8),
+                RowCount = 3
+            };
+            configurationLayout.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100));
+            configurationLayout.RowStyles.Add(new RowStyle(SizeType.AutoSize));
+            configurationLayout.RowStyles.Add(new RowStyle(SizeType.AutoSize));
+            configurationLayout.RowStyles.Add(new RowStyle(SizeType.AutoSize));
+            configurationLayout.Controls.Add(processRow, 0, 0);
+            configurationLayout.Controls.Add(modeRow, 0, 1);
+            configurationLayout.Controls.Add(optionRow, 0, 2);
+
+            statusGroupBox.Margin = new Padding(0, 0, 0, 8);
+            updateGroupBox.Margin = new Padding(0, 0, 0, 8);
+            networkDetailGroupBox.Margin = new Padding(0, 0, 0, 8);
+            inventoryGrid.Margin = new Padding(0);
+
+            rootLayoutPanel = new TableLayoutPanel
+            {
+                AutoSize = true,
+                AutoSizeMode = AutoSizeMode.GrowAndShrink,
+                ColumnCount = 1,
+                Dock = DockStyle.Top,
+                MinimumSize = new Size(700, 0),
+                Padding = new Padding(18, 14, 18, 14),
+                RowCount = 5
+            };
+            rootLayoutPanel.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100));
+            rootLayoutPanel.RowStyles.Add(new RowStyle(SizeType.AutoSize));
+            rootLayoutPanel.RowStyles.Add(new RowStyle(SizeType.AutoSize));
+            rootLayoutPanel.RowStyles.Add(new RowStyle(SizeType.AutoSize));
+            rootLayoutPanel.RowStyles.Add(new RowStyle(SizeType.AutoSize));
+            rootLayoutPanel.RowStyles.Add(new RowStyle(SizeType.AutoSize));
+            rootLayoutPanel.Controls.Add(configurationLayout, 0, 0);
+            rootLayoutPanel.Controls.Add(statusGroupBox, 0, 1);
+            rootLayoutPanel.Controls.Add(updateGroupBox, 0, 2);
+            rootLayoutPanel.Controls.Add(networkDetailGroupBox, 0, 3);
+            rootLayoutPanel.Controls.Add(inventoryGrid, 0, 4);
+
+            Controls.Add(rootLayoutPanel);
             Name = "FishXIVItemReader";
             Size = new Size(700, 420);
             AutoScroll = true;
+            AutoScrollMinSize = new Size(700, 0);
+            // 此界面以 Windows 100% 缩放下的默认中文 WinForms 字体为设计基准。
+            AutoScaleDimensions = new SizeF(7F, 17F);
+            AutoScaleMode = AutoScaleMode.Font;
             networkInventoryReader = new DeucalionInventoryReader();
             inventoryWebSocketServer = new InventoryWebSocketServer();
             overlayPluginEventBridge = new OverlayPluginEventBridge();
             inventoryWebSocketServer.MessagePublished += overlayPluginEventBridge.PublishJson;
             inventoryWebSocketServer.ClientCountChanged += RefreshWebSocketStatusPanel;
             overlayPluginEventBridge.StatusChanged += SetStatusOverlayPluginFromWorker;
-            Resize += delegate { LayoutControls(); };
-            LayoutControls();
+            ResumeLayout(performLayout: true);
         }
 
         public void InitPlugin(TabPage pluginScreenSpace, Label pluginStatusText)
@@ -537,8 +640,8 @@ namespace FishXIVItemReader
         {
             var nameLabel = new Label
             {
-                AutoSize = false,
-                Dock = DockStyle.Fill,
+                AutoSize = true,
+                Anchor = AnchorStyles.Left,
                 Text = name,
                 TextAlign = ContentAlignment.MiddleLeft
             };
@@ -726,10 +829,7 @@ namespace FishXIVItemReader
                 ResetNetworkDetailPanel();
             }
 
-            if (inventoryGrid != null)
-            {
-                LayoutControls();
-            }
+            rootLayoutPanel.PerformLayout();
         }
 
         private bool ShouldShowNetworkDetailPanel()
@@ -901,62 +1001,6 @@ namespace FishXIVItemReader
                 UpdateModeHint();
                 RestartAutoRead();
             }
-        }
-
-        private void LayoutControls()
-        {
-            const int margin = 18;
-            const int gap = 8;
-            const int refreshWidth = 92;
-            const int switchWindowWidth = 96;
-            const int readWidth = 120;
-            const int applyPortWidth = 76;
-            const int portInputWidth = 76;
-            const int portLabelWidth = 58;
-            const int buttonHeight = 28;
-
-            var right = Math.Max(Width - margin, 680);
-            var readLeft = right - readWidth;
-            var switchWindowLeft = readLeft - gap - switchWindowWidth;
-            var refreshLeft = switchWindowLeft - gap - refreshWidth;
-            var comboRight = refreshLeft - gap;
-            var applyPortLeft = right - applyPortWidth;
-            var portInputLeft = applyPortLeft - gap - portInputWidth;
-            var portLabelLeft = portInputLeft - gap - portLabelWidth;
-
-            processComboBox.Width = Math.Max(220, comboRight - processComboBox.Left);
-            readModeComboBox.Width = Math.Max(160, Math.Min(240, portLabelLeft - gap - readModeComboBox.Left));
-            webSocketPortLabel.Location = new Point(portLabelLeft, 52);
-            webSocketPortNumericUpDown.Location = new Point(portInputLeft, 48);
-            webSocketPortNumericUpDown.Size = new Size(portInputWidth, 24);
-            applyWebSocketPortButton.Location = new Point(applyPortLeft, 46);
-            applyWebSocketPortButton.Size = new Size(applyPortWidth, buttonHeight);
-            debugModeCheckBox.Location = new Point(applyPortLeft, 80);
-            refreshProcessesButton.Location = new Point(refreshLeft, 14);
-            refreshProcessesButton.Size = new Size(refreshWidth, buttonHeight);
-            switchWindowButton.Location = new Point(switchWindowLeft, 14);
-            switchWindowButton.Size = new Size(switchWindowWidth, buttonHeight);
-            readInventoryButton.Location = new Point(readLeft, 14);
-            readInventoryButton.Size = new Size(readWidth, buttonHeight);
-            statusGroupBox.Width = Math.Max(320, right - statusGroupBox.Left);
-            updateGroupBox.Width = Math.Max(320, right - updateGroupBox.Left);
-            updateGroupBox.Location = new Point(margin, statusGroupBox.Bottom + gap);
-            networkDetailGroupBox.Width = Math.Max(320, right - networkDetailGroupBox.Left);
-            networkDetailGroupBox.Location = new Point(margin, updateGroupBox.Bottom + gap);
-            var gridTop = networkDetailGroupBox.Visible
-                ? networkDetailGroupBox.Bottom + gap
-                : updateGroupBox.Bottom + gap;
-            inventoryGrid.Location = new Point(margin, gridTop);
-            inventoryGrid.Width = Math.Max(320, right - inventoryGrid.Left);
-            inventoryGrid.Height = Math.Max(180, Height - inventoryGrid.Top - margin);
-
-            refreshProcessesButton.BringToFront();
-            switchWindowButton.BringToFront();
-            readInventoryButton.BringToFront();
-            webSocketPortLabel.BringToFront();
-            webSocketPortNumericUpDown.BringToFront();
-            applyWebSocketPortButton.BringToFront();
-            debugModeCheckBox.BringToFront();
         }
 
         private async Task CheckPluginUpdateAsync()
