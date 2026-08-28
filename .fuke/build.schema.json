@@ -41,7 +41,7 @@
         "Quiet"
       ]
     },
-    "NukeBuild": {
+    "FukeBuild": {
       "properties": {
         "Continue": {
           "type": "boolean",
@@ -57,7 +57,7 @@
         },
         "NoLogo": {
           "type": "boolean",
-          "description": "Disables displaying the NUKE logo"
+          "description": "Disables displaying the FUKE logo"
         },
         "Partition": {
           "type": "string",
@@ -141,7 +141,7 @@
       }
     },
     {
-      "$ref": "#/definitions/NukeBuild"
+      "$ref": "#/definitions/FukeBuild"
     }
   ]
 }

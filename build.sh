@@ -5,8 +5,8 @@ bash --version 2>&1 | head -n 1
 set -eo pipefail
 SCRIPT_DIR=$(cd "$( dirname "${BASH_SOURCE[0]}" )" && pwd)
 
-BUILD_PROJECT_FILE="$SCRIPT_DIR/NukeBuild/NukeBuild.csproj"
-TEMP_DIRECTORY="$SCRIPT_DIR/.nuke/temp"
+BUILD_PROJECT_FILE="$SCRIPT_DIR/FukeBuild/FukeBuild.csproj"
+TEMP_DIRECTORY="$SCRIPT_DIR/.fuke/temp"
 
 DOTNET_GLOBAL_FILE="$SCRIPT_DIR/global.json"
 DOTNET_INSTALL_URL="https://dot.net/v1/dotnet-install.sh"

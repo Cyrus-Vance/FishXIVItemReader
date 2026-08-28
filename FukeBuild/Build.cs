@@ -9,12 +9,12 @@ using System.Linq;
 using System.Security.Cryptography;
 using System.Text;
 using System.Text.RegularExpressions;
-using Nuke.Common;
-using Nuke.Common.IO;
-using Nuke.Common.Tools.DotNet;
-using static Nuke.Common.Tools.DotNet.DotNetTasks;
+using Fuke.Common;
+using Fuke.Common.IO;
+using Fuke.Common.Tools.DotNet;
+using static Fuke.Common.Tools.DotNet.DotNetTasks;
 
-class Build : NukeBuild
+class Build : FukeBuild
 {
     const string PluginName = "FishXIVItemReader";
     const string UpdateManifestFileName = "FishXIVItemReader.update.json";
@@ -455,7 +455,7 @@ class Build : NukeBuild
         }
 
         throw new InvalidOperationException(
-            "发布已中止：当前存在未提交的文件改动。请先提交或清理工作区后再运行 nuke github。\n" +
+            "发布已中止：当前存在未提交的文件改动。请先提交或清理工作区后再运行 fuke github。\n" +
             status.StdOut);
     }
 
@@ -665,7 +665,7 @@ class Build : NukeBuild
         catch (Win32Exception ex)
         {
             var message = string.Equals(fileName, "gh", StringComparison.OrdinalIgnoreCase)
-                ? "未找到 GitHub CLI gh。请先安装 GitHub CLI，并执行 gh auth login 后再运行 nuke github。"
+                ? "未找到 GitHub CLI gh。请先安装 GitHub CLI，并执行 gh auth login 后再运行 fuke github。"
                 : $"未找到命令：{fileName}";
             throw new InvalidOperationException(message, ex);
         }

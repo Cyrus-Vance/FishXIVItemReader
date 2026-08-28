@@ -17,9 +17,9 @@
   </PropertyGroup>
 
   <ItemGroup>
-    <Compile Remove="NukeBuild\**" />
-    <EmbeddedResource Remove="NukeBuild\**" />
-    <None Remove="NukeBuild\**" />
+    <Compile Remove="FukeBuild\**" />
+    <EmbeddedResource Remove="FukeBuild\**" />
+    <None Remove="FukeBuild\**" />
     <None Remove="GameClient\DeucalionOpcodes.json" />
     <None Remove="Update\UpdateSource.json" />
   </ItemGroup>

@@ -1,5 +1,5 @@
 <Solution>
-  <Project Path="NukeBuild/NukeBuild.csproj" />
+  <Project Path="FukeBuild/FukeBuild.csproj" />
   <Project Path="FishXIVItemReader.Updater/FishXIVItemReader.Updater.csproj" />
   <Project Path="FishXIVItemReader/FishXIVItemReader.csproj" />
 </Solution>
