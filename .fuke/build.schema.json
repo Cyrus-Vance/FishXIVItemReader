@@ -45,55 +45,55 @@
       "properties": {
         "Continue": {
           "type": "boolean",
-          "description": "Indicates to continue a previously failed build attempt"
+          "description": "Continue the previous failed build."
         },
         "Help": {
           "type": "boolean",
-          "description": "Shows the help text for this build assembly"
+          "description": "Show help for this build assembly."
         },
         "Host": {
-          "description": "Host for execution. Default is 'automatic'",
+          "description": "Execution host. Defaults to 'automatic'.",
           "$ref": "#/definitions/Host"
         },
         "NoLogo": {
           "type": "boolean",
-          "description": "Disables displaying the FUKE logo"
+          "description": "Suppress the FUKE header and ASCII logo."
         },
         "Partition": {
           "type": "string",
-          "description": "Partition to use on CI"
+          "description": "Partition used on CI."
         },
         "Plan": {
           "type": "boolean",
-          "description": "Shows the execution plan (HTML)"
+          "description": "Show the execution plan as HTML."
         },
         "Profile": {
           "type": "array",
-          "description": "Defines the profiles to load",
+          "description": "Profiles to load.",
           "items": {
             "type": "string"
           }
         },
         "Root": {
           "type": "string",
-          "description": "Root directory during build execution"
+          "description": "Root directory used during build execution."
         },
         "Skip": {
           "type": "array",
-          "description": "List of targets to be skipped. Empty list skips all dependencies",
+          "description": "List of targets to skip. An empty list skips all dependencies.",
           "items": {
             "$ref": "#/definitions/ExecutableTarget"
           }
         },
         "Target": {
           "type": "array",
-          "description": "List of targets to be invoked. Default is '{default_target}'",
+          "description": "List of targets to invoke. Defaults to '{default_target}'.",
           "items": {
             "$ref": "#/definitions/ExecutableTarget"
           }
         },
         "Verbosity": {
-          "description": "Logging verbosity during build execution. Default is 'Normal'",
+          "description": "Logging verbosity during build execution. Defaults to 'Normal'.",
           "$ref": "#/definitions/Verbosity"
         }
       }
@@ -104,11 +104,11 @@
       "properties": {
         "ActInstallDir": {
           "type": "string",
-          "description": "ACT installation directory used only as the compile-time reference source"
+          "description": "ACT installation directory used only as the compile-time reference source."
         },
         "Configuration": {
           "type": "string",
-          "description": "Build configuration used for plugin compilation",
+          "description": "Build configuration used for plugin compilation.",
           "enum": [
             "Debug",
             "Release"
@@ -116,26 +116,26 @@
         },
         "GitHubRepository": {
           "type": "string",
-          "description": "GitHub repository in owner/name form. Defaults to the origin remote"
+          "description": "GitHub repository in owner/name form. Defaults to the origin remote."
         },
         "LocalPluginDirectory": {
           "type": "string",
-          "description": "Local ACT plugin directory updated by the Local target"
+          "description": "Local ACT plugin directory updated by the Local target."
         },
         "ReleaseNotes": {
           "type": "string",
-          "description": "Release notes used by Github"
+          "description": "Release notes used by Github."
         },
         "Version": {
           "type": "string",
-          "description": "Release version used by Package/Github. Defaults to Properties/AssemblyVersion.cs"
+          "description": "Release version used by Package/Github. Defaults to Properties/AssemblyVersion.cs."
         },
         "VersionPart": {
           "type": [
             "integer",
             "null"
           ],
-          "description": "Version part incremented by Github. 1=0.0.0.x, 2=0.0.x.0, 3=0.x.0.0, 4=x.0.0.0",
+          "description": "Version part incremented by Github. 1=0.0.0.x, 2=0.0.x.0, 3=0.x.0.0, 4=x.0.0.0.",
           "format": "int32"
         }
       }
