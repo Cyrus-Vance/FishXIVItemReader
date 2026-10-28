@@ -98,6 +98,7 @@ class Build : FukeBuild
         .Executes(() =>
         {
             EnsureGitWorkingTreeCleanForGitHubPublish();
+            EnsureActReferenceExists();
 
             var version = GetGitHubReleaseVersion();
             var repository = GetGitHubRepository();
@@ -595,7 +596,7 @@ class Build : FukeBuild
 
         var candidates = new[]
         {
-            @"D:\FFXIVACT_CN",
+            @"D:\FF14ACT_GJF",
             Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ProgramFilesX86), "Advanced Combat Tracker"),
             Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ProgramFiles), "Advanced Combat Tracker"),
         };
