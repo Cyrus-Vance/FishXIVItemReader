@@ -1,36 +1,36 @@
 {
   "schemaVersion": 1,
-  "inventoryOperationBaseValue": 514,
+  "inventoryOperationBaseValue": 290,
   "opcodes": [
     {
       "name": "ContainerInfo",
-      "serverOpcode": 435,
+      "serverOpcode": 731,
       "clientOpcode": 0
     },
     {
       "name": "ItemInfo",
-      "serverOpcode": 132,
+      "serverOpcode": 209,
       "clientOpcode": 0
     },
     {
       "name": "CurrencyCrystalInfo",
-      "serverOpcode": 422,
+      "serverOpcode": 798,
       "clientOpcode": 0
     },
     {
       "name": "UpdateInventorySlot",
-      "serverOpcode": 674,
+      "serverOpcode": 675,
       "clientOpcode": 0
     },
     {
       "name": "InventoryTransaction",
-      "serverOpcode": 570,
+      "serverOpcode": 813,
       "clientOpcode": 0
     },
     {
       "name": "InventoryModifyHandler",
       "serverOpcode": 0,
-      "clientOpcode": 507
+      "clientOpcode": 283
     }
   ]
 }
